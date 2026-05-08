@@ -46,7 +46,7 @@ func runScheduler(ctx context.Context, s *server.MCPServer) {
 							// "skip": calculate next run and update
 							var config map[string]interface{}
 							if err := json.Unmarshal(t.TriggerConfig, &config); err == nil {
-								if newNextRun, calcErr := calculateNextRun(t.TriggerType, config); calcErr == nil {
+								if newNextRun, calcErr := calculateNextRun(t.TriggerType, config, time.Now()); calcErr == nil {
 									completeTask(workerCtx, t.ID, newNextRun)
 									return
 								}
@@ -111,7 +111,7 @@ func runScheduler(ctx context.Context, s *server.MCPServer) {
 						return
 					}
 
-					newNextRun, calcErr := calculateNextRun(t.TriggerType, config)
+					newNextRun, calcErr := calculateNextRun(t.TriggerType, config, time.Now())
 					if calcErr != nil {
 						log.Printf("Error calculating next run for task %s: %v", t.ID, calcErr)
 						// Fallback: pause the task if we can't calculate next run
@@ -167,9 +167,7 @@ func completeTask(ctx context.Context, taskID string, nextRun time.Time) {
 }
 
 // calculateNextRun determines the next run time based on trigger_type and trigger_config
-func calculateNextRun(triggerType string, config map[string]interface{}) (time.Time, error) {
-	now := time.Now().UTC()
-
+func calculateNextRun(triggerType string, config map[string]interface{}, now time.Time) (time.Time, error) {
 	switch triggerType {
 	case TriggerCron:
 		cronExpr, ok := config["cron"].(string)
