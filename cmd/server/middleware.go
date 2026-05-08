@@ -24,7 +24,7 @@ func authMiddleware(next http.Handler, mcpServer *server.MCPServer) http.Handler
 		}
 
 		// Phase 4: Rate Limiting
-		if !globalRateLimiter.Allow(userID) {
+		if !globalRateLimiter.Allow(r.Context(), userID) {
 			http.Error(w, "Too Many Requests", http.StatusTooManyRequests)
 			return
 		}
