@@ -82,6 +82,10 @@ func main() {
 			http.Error(w, "Database unavailable", http.StatusServiceUnavailable)
 			return
 		}
+		if err := redisClient.Ping(r.Context()).Err(); err != nil {
+			http.Error(w, "Redis unavailable", http.StatusServiceUnavailable)
+			return
+		}
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("OK"))
 	})

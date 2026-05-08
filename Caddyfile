@@ -1,0 +1,18 @@
+# Caddyfile for Phase 4 API Security and 10k connections scaling
+# Deploying on Hostinger VPS
+
+api.yourservice.com {
+    # Reverse proxy to the Go MCP Server container
+    reverse_proxy localhost:8080 {
+        # CRITICAL for SSE: flush_interval -1 disables response buffering
+        # Without this, Caddy buffers the server-sent events, causing Gemini CLI to hang
+        flush_interval -1
+    }
+
+    # Logging for observability
+    log {
+        output file /var/log/caddy/access.log
+    }
+
+    # Automatic HTTPS is handled by default by Caddy
+}
