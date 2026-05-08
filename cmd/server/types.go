@@ -4,14 +4,17 @@ import (
 	"time"
 )
 
-type User struct {
-	ID           string    `json:"id"`
-	Email        string    `json:"email"`
-	PasswordHash string    `json:"-"`
-	APIKey       string    `json:"api_key"`
-	Role         string    `json:"role"`
-	Tier         string    `json:"tier"`
-	CreatedAt    time.Time `json:"created_at"`
+type TaskLog struct {
+	ID            string    `json:"id"`
+	TaskID        string    `json:"task_id"`
+	UserID        string    `json:"user_id"`
+	ExecutionTime time.Time `json:"execution_time"`
+	Status        string    `json:"status"`
+	LLMResponse   *string   `json:"llm_response"`
+	ErrorMessage  *string   `json:"error_message"`
+	// Joined fields
+	TaskName  string `json:"task_name"`
+	UserEmail string `json:"user_email"`
 }
 
 // Task represents a scheduled task in the database
