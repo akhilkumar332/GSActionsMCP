@@ -1,0 +1,49 @@
+{{define "title"}}System Monitor - Schedule MCP{{end}}
+
+{{define "content"}}
+<div class="header-actions">
+    <h1>System Monitor</h1>
+    <p class="text-muted">Live execution logs across all users</p>
+</div>
+
+<div class="terminal-view mt-4">
+    <div class="terminal-header">
+        <div class="dot dot-red"></div>
+        <div class="dot dot-yellow"></div>
+        <div class="dot dot-green"></div>
+        <span style="margin-left: 1rem; color: #888; font-size: 0.75rem;">task_logs --last 100</span>
+    </div>
+    <div class="terminal-body">
+        <table style="width: 100%; border-collapse: collapse; color: var(--terminal-text);">
+            <thead>
+                <tr style="text-align: left; border-bottom: 1px solid #333;">
+                    <th style="padding: 0.5rem;">ID</th>
+                    <th style="padding: 0.5rem;">Task</th>
+                    <th style="padding: 0.5rem;">User</th>
+                    <th style="padding: 0.5rem;">Status</th>
+                    <th style="padding: 0.5rem;">Time</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{range .Data.Logs}}
+                <tr style="border-bottom: 1px solid #222;">
+                    <td style="padding: 0.5rem; font-size: 0.75rem; color: #888;">{{printf "%.8s" .ID}}</td>
+                    <td style="padding: 0.5rem;">{{.TaskName}}</td>
+                    <td style="padding: 0.5rem;">{{.UserEmail}}</td>
+                    <td style="padding: 0.5rem;">
+                        <span style="color: {{if eq .Status "success"}}#4ade80{{else if eq .Status "failure"}}#f87171{{else}}#fbbf24{{end}}">
+                            {{.Status}}
+                        </span>
+                    </td>
+                    <td style="padding: 0.5rem; font-size: 0.75rem;">{{.ExecutionTime.Format "15:04:05 02 Jan"}}</td>
+                </tr>
+                {{else}}
+                <tr>
+                    <td colspan="5" style="padding: 2rem; text-align: center; color: #666;">No logs found.</td>
+                </tr>
+                {{end}}
+            </tbody>
+        </table>
+    </div>
+</div>
+{{end}}
