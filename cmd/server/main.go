@@ -123,6 +123,13 @@ func main() {
 		sendJSON(w, http.StatusOK, APIResponse{Success: true, Message: "OK"})
 	}))
 
+	// API Handlers
+	mux.Handle("/api/dashboard", csrfMiddleware(sessionMiddleware(http.HandlerFunc(apiDashboardHandler))))
+	mux.Handle("/api/rotate-api-key", csrfMiddleware(sessionMiddleware(http.HandlerFunc(apiRotateAPIKeyHandler))))
+	mux.Handle("/api/monitor", csrfMiddleware(sessionMiddleware(RequireRole("staff", "admin")(http.HandlerFunc(apiMonitorHandler)))))
+	mux.Handle("/api/admin/users", csrfMiddleware(sessionMiddleware(RequireRole("admin")(http.HandlerFunc(apiAdminUsersHandler)))))
+	mux.Handle("/api/admin/users/update", csrfMiddleware(sessionMiddleware(RequireRole("admin")(http.HandlerFunc(apiAdminUpdateUserHandler)))))
+
 	// Auth Handlers
 	mux.Handle("/signup", csrfMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet {
