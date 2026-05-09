@@ -167,6 +167,16 @@ func main() {
 	go runScheduler(ctx, mcpServer)
 	go runReaper(ctx)
 
+	// Bootstrap Admin
+	adminEmail := os.Getenv("ADMIN_EMAIL")
+	if adminEmail != "" {
+		log.Printf("Bootstrapping admin role for: %s", adminEmail)
+		_, err := dbPool.Exec(ctx, "UPDATE users SET role = 'admin' WHERE email = $1", adminEmail)
+		if err != nil {
+			log.Printf("Failed to bootstrap admin: %v", err)
+		}
+	}
+
 	// 5. Start HTTP Server
 	port := os.Getenv("PORT")
 	if port == "" {
