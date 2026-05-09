@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -13,6 +14,8 @@ import (
 	"github.com/gorilla/csrf"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v4/middleware"
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/redis/go-redis/v9"
@@ -61,20 +64,30 @@ func main() {
 	globalRateLimiter.client = redisClient
 	GlobalSessionManager.Init(redisClient)
 
+	// 2. Initialize MCP Server
+	mcpServer := server.NewMCPServer("scheduled-actions", "1.0.0")
+
+	// Register Tools
+	registerTools(mcpServer)
+
+	// 3. Setup Echo Server
+	e := echo.New()
+
+	// Standard Echo Middleware
+	e.Use(middleware.Logger())
+	e.Use(middleware.Recover())
+
 	// CSRF Setup
 	csrfKey := os.Getenv("CSRF_KEY")
 	if len(csrfKey) < 32 {
 		csrfKey = "01234567890123456789012345678901" // 32-byte fallback
 	}
-	
-	// Determine if we should use Secure cookies.
-	// Only use Secure if ENV is production AND we are NOT on localhost.
 	useSecure := os.Getenv("ENV") == "production"
 	if os.Getenv("LOCAL_DEV") == "true" {
 		useSecure = false
 	}
 
-	csrfMiddleware := csrf.Protect(
+	csrfMiddleware := echo.WrapMiddleware(csrf.Protect(
 		[]byte(csrfKey),
 		csrf.Secure(useSecure),
 		csrf.SameSite(csrf.SameSiteLaxMode),
@@ -82,83 +95,69 @@ func main() {
 		csrf.TrustedOrigins([]string{"localhost:8080", "127.0.0.1:8080"}),
 		csrf.ErrorHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			log.Printf("CSRF Failure for %s %s: %v", r.Method, r.URL.Path, csrf.FailureReason(r))
-			sendJSON(w, http.StatusForbidden, APIResponse{
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusForbidden)
+			json.NewEncoder(w).Encode(APIResponse{
 				Success: false,
 				Error:   fmt.Sprintf("Forbidden - CSRF error: %v", csrf.FailureReason(r)),
 			})
 		})),
-	)
+	))
 
-	// 2. Initialize MCP Server
-	mcpServer := server.NewMCPServer("scheduled-actions", "1.0.0")
-
-	// Register Tools
-	registerTools(mcpServer)
-
-	// 3. Setup SSE Handler with Auth Middleware
-	mux := http.NewServeMux()
-
-	// Assuming the SDK provides an SSE handler endpoint.
+	// MCP SSE Handlers (using net/http compatible wrappers)
 	sseServer := server.NewSSEServer(mcpServer)
-	mux.Handle("/sse", authMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	e.GET("/sse", echo.WrapHandler(NetHttpAuthMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		userID := r.Context().Value("user_id").(string)
 		go GlobalSessionManager.MaintainHeartbeat(r.Context(), userID, mcpServer)
 		sseServer.SSEHandler().ServeHTTP(w, r)
-	}), mcpServer))
-	mux.Handle("/message", authMiddleware(sseServer.MessageHandler(), mcpServer))
+	}), mcpServer)))
+	e.POST("/message", echo.WrapHandler(NetHttpAuthMiddleware(sseServer.MessageHandler(), mcpServer)))
 
-	// Phase 4: Telemetry & Observability
-	mux.Handle("/metrics", promhttp.Handler())
-
-	// Static files
-	fs := http.FileServer(http.Dir("static"))
-	mux.Handle("/static/", http.StripPrefix("/static/", fs))
-
-	// Serve React Frontend assets
-	frontendFS := http.FileServer(http.Dir("frontend/dist"))
-	mux.Handle("/assets/", frontendFS)
-
-	// Catch-all handler for React SPA
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		path := r.URL.Path
-		if len(path) > 4 && path[:5] == "/api/" {
-			http.NotFound(w, r)
-			return
+	// Telemetry & Observability
+	e.GET("/metrics", echo.WrapHandler(promhttp.Handler()))
+	e.GET("/api/healthz", func(c echo.Context) error {
+		if err := dbPool.Ping(c.Request().Context()); err != nil {
+			return c.JSON(http.StatusServiceUnavailable, APIResponse{Success: false, Error: "Database unavailable"})
 		}
-		
-		fpath := "frontend/dist" + path
-		if _, err := os.Stat(fpath); os.IsNotExist(err) || path == "/" {
-			http.ServeFile(w, r, "frontend/dist/index.html")
-		} else {
-			frontendFS.ServeHTTP(w, r)
+		if err := redisClient.Ping(c.Request().Context()).Err(); err != nil {
+			return c.JSON(http.StatusServiceUnavailable, APIResponse{Success: false, Error: "Redis unavailable"})
 		}
+		return c.JSON(http.StatusOK, APIResponse{Success: true, Message: "OK"})
 	})
 
-	// Auth API Handlers
-	mux.Handle("/api/auth/csrf", csrfMiddleware(http.HandlerFunc(apiCSRFHandler)))
-	mux.Handle("/api/auth/signup", csrfMiddleware(http.HandlerFunc(apiSignupHandler)))
-	mux.Handle("/api/auth/login", csrfMiddleware(http.HandlerFunc(apiLoginHandler)))
-	mux.Handle("/api/auth/logout", csrfMiddleware(http.HandlerFunc(apiLogoutHandler)))
+	// Static files
+	e.Static("/static", "static")
+	e.Static("/assets", "frontend/dist/assets")
 
-	// Health Check
-	mux.Handle("/api/healthz", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if err := dbPool.Ping(r.Context()); err != nil {
-			sendJSON(w, http.StatusServiceUnavailable, APIResponse{Success: false, Error: "Database unavailable"})
-			return
-		}
-		if err := redisClient.Ping(r.Context()).Err(); err != nil {
-			sendJSON(w, http.StatusServiceUnavailable, APIResponse{Success: false, Error: "Redis unavailable"})
-			return
-		}
-		sendJSON(w, http.StatusOK, APIResponse{Success: true, Message: "OK"})
-	}))
+	// Auth API Handlers
+	authGroup := e.Group("/api/auth", csrfMiddleware)
+	authGroup.GET("/csrf", apiCSRFHandler)
+	authGroup.POST("/signup", apiSignupHandler)
+	authGroup.POST("/login", apiLoginHandler)
+	authGroup.POST("/logout", apiLogoutHandler)
 
 	// Protected API Handlers
-	mux.Handle("/api/dashboard", csrfMiddleware(sessionMiddleware(http.HandlerFunc(apiDashboardHandler))))
-	mux.Handle("/api/rotate-api-key", csrfMiddleware(sessionMiddleware(http.HandlerFunc(apiRotateAPIKeyHandler))))
-	mux.Handle("/api/monitor", csrfMiddleware(sessionMiddleware(RequireRole("staff", "admin")(http.HandlerFunc(apiMonitorHandler)))))
-	mux.Handle("/api/admin/users", csrfMiddleware(sessionMiddleware(RequireRole("admin")(http.HandlerFunc(apiAdminUsersHandler)))))
-	mux.Handle("/api/admin/users/update", csrfMiddleware(sessionMiddleware(RequireRole("admin")(http.HandlerFunc(apiAdminUpdateUserHandler)))))
+	api := e.Group("/api", csrfMiddleware, EchoSessionMiddleware)
+	api.GET("/dashboard", apiDashboardHandler)
+	api.POST("/rotate-api-key", apiRotateAPIKeyHandler)
+	
+	staff := api.Group("", EchoRequireRole("staff", "admin"))
+	staff.GET("/monitor", apiMonitorHandler)
+	
+	admin := api.Group("/admin", EchoRequireRole("admin"))
+	admin.GET("/users", apiAdminUsersHandler)
+	admin.POST("/users/update", apiAdminUpdateUserHandler)
+
+	// Catch-all handler for React SPA
+	e.GET("/*", func(c echo.Context) error {
+		path := c.Request().URL.Path
+		// Check if file exists in dist, otherwise serve index.html
+		fpath := "frontend/dist" + path
+		if _, err := os.Stat(fpath); os.IsNotExist(err) || path == "/" {
+			return c.File("frontend/dist/index.html")
+		}
+		return c.File(fpath)
+	})
 
 	// 4. Start Background Scheduler & Reaper
 	go runScheduler(ctx, mcpServer)
@@ -170,15 +169,9 @@ func main() {
 		port = "8080"
 	}
 	
-	srv := &http.Server{
-		Addr:    ":" + port,
-		Handler: mux,
-	}
-
 	go func() {
-		log.Printf("Server listening on :%s", port)
-		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("ListenAndServe error: %v", err)
+		if err := e.Start(":" + port); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("shuting down the server: %v", err)
 		}
 	}()
 
@@ -214,7 +207,7 @@ func main() {
 		log.Printf("Reverted tasks for worker %s", workerID)
 	}
 
-	if err := srv.Shutdown(shutdownCtx); err != nil {
+	if err := e.Shutdown(shutdownCtx); err != nil {
 		log.Fatalf("Server Shutdown Failed: %+v", err)
 	}
 	log.Println("Server exited properly")

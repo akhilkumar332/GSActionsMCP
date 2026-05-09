@@ -1,27 +1,19 @@
 package main
 
 import (
-	"encoding/json"
 	"net/http"
 	"os"
 	"time"
 
 	"github.com/gorilla/csrf"
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/labstack/echo/v4"
 	"schedule-mcp/db"
 )
 
 type AuthInput struct {
 	Email    string `json:"email"`
 	Password string `json:"password"`
-}
-
-func sendJSON(w http.ResponseWriter, status int, data interface{}) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	if data != nil {
-		json.NewEncoder(w).Encode(data)
-	}
 }
 
 type APIResponse struct {
@@ -32,54 +24,40 @@ type APIResponse struct {
 	CSRFToken string      `json:"csrfToken,omitempty"`
 }
 
-func apiCSRFHandler(w http.ResponseWriter, r *http.Request) {
-	sendJSON(w, http.StatusOK, APIResponse{
+func apiCSRFHandler(c echo.Context) error {
+	return c.JSON(http.StatusOK, APIResponse{
 		Success:   true,
-		CSRFToken: csrf.Token(r),
+		CSRFToken: csrf.Token(c.Request()),
 	})
 }
 
-func apiSignupHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		sendJSON(w, http.StatusMethodNotAllowed, APIResponse{Success: false, Error: "Method Not Allowed"})
-		return
-	}
-
+func apiSignupHandler(c echo.Context) error {
 	var input AuthInput
-	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
-		sendJSON(w, http.StatusBadRequest, APIResponse{Success: false, Error: "Invalid request body"})
-		return
+	if err := c.Bind(&input); err != nil {
+		return c.JSON(http.StatusBadRequest, APIResponse{Success: false, Error: "Invalid request body"})
 	}
 
-	user, err := RegisterUser(r.Context(), input.Email, input.Password)
+	user, err := RegisterUser(c.Request().Context(), input.Email, input.Password)
 	if err != nil {
-		sendJSON(w, http.StatusBadRequest, APIResponse{Success: false, Error: err.Error()})
-		return
+		return c.JSON(http.StatusBadRequest, APIResponse{Success: false, Error: err.Error()})
 	}
 
-	sendJSON(w, http.StatusCreated, APIResponse{
+	return c.JSON(http.StatusCreated, APIResponse{
 		Success:   true,
 		Data:      user,
-		CSRFToken: csrf.Token(r),
+		CSRFToken: csrf.Token(c.Request()),
 	})
 }
 
-func apiLoginHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		sendJSON(w, http.StatusMethodNotAllowed, APIResponse{Success: false, Error: "Method Not Allowed"})
-		return
-	}
-
+func apiLoginHandler(c echo.Context) error {
 	var input AuthInput
-	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
-		sendJSON(w, http.StatusBadRequest, APIResponse{Success: false, Error: "Invalid request body"})
-		return
+	if err := c.Bind(&input); err != nil {
+		return c.JSON(http.StatusBadRequest, APIResponse{Success: false, Error: "Invalid request body"})
 	}
 
-	sessionID, err := LoginUser(r.Context(), input.Email, input.Password)
+	sessionID, err := LoginUser(c.Request().Context(), input.Email, input.Password)
 	if err != nil {
-		sendJSON(w, http.StatusUnauthorized, APIResponse{Success: false, Error: "Invalid email or password"})
-		return
+		return c.JSON(http.StatusUnauthorized, APIResponse{Success: false, Error: "Invalid email or password"})
 	}
 
 	// Determine if we should use Secure cookies.
@@ -88,7 +66,7 @@ func apiLoginHandler(w http.ResponseWriter, r *http.Request) {
 		useSecure = false
 	}
 
-	http.SetCookie(w, &http.Cookie{
+	c.SetCookie(&http.Cookie{
 		Name:     "session_id",
 		Value:    sessionID,
 		Path:     "/",
@@ -101,19 +79,17 @@ func apiLoginHandler(w http.ResponseWriter, r *http.Request) {
 	// Parse session ID into pgtype.UUID
 	var sessID pgtype.UUID
 	if err := parseUUID(sessionID, &sessID); err != nil {
-		sendJSON(w, http.StatusInternalServerError, APIResponse{Success: false, Error: "Internal Error"})
-		return
+		return c.JSON(http.StatusInternalServerError, APIResponse{Success: false, Error: "Internal Error"})
 	}
 
 	// Fetch user info to return
-	u, err := queries.GetUserBySessionID(r.Context(), db.GetUserBySessionIDParams{
+	u, err := queries.GetUserBySessionID(c.Request().Context(), db.GetUserBySessionIDParams{
 		ID:        sessID,
 		ExpiresAt: pgtype.Timestamptz{Time: time.Now().UTC(), Valid: true},
 	})
 
 	if err != nil {
-		sendJSON(w, http.StatusInternalServerError, APIResponse{Success: false, Error: "Failed to fetch user info"})
-		return
+		return c.JSON(http.StatusInternalServerError, APIResponse{Success: false, Error: "Failed to fetch user info"})
 	}
 
 	user := &User{
@@ -125,19 +101,19 @@ func apiLoginHandler(w http.ResponseWriter, r *http.Request) {
 		CreatedAt: u.CreatedAt.Time,
 	}
 
-	sendJSON(w, http.StatusOK, APIResponse{
+	return c.JSON(http.StatusOK, APIResponse{
 		Success:   true,
 		Data:      user,
-		CSRFToken: csrf.Token(r),
+		CSRFToken: csrf.Token(c.Request()),
 	})
 }
 
-func apiLogoutHandler(w http.ResponseWriter, r *http.Request) {
-	cookie, err := r.Cookie("session_id")
+func apiLogoutHandler(c echo.Context) error {
+	cookie, err := c.Cookie("session_id")
 	if err == nil && cookie.Value != "" {
 		var sessID pgtype.UUID
 		if err := parseUUID(cookie.Value, &sessID); err == nil {
-			_ = queries.DeleteWebSession(r.Context(), sessID)
+			_ = queries.DeleteWebSession(c.Request().Context(), sessID)
 		}
 	}
 
@@ -147,7 +123,7 @@ func apiLogoutHandler(w http.ResponseWriter, r *http.Request) {
 		useSecure = false
 	}
 
-	http.SetCookie(w, &http.Cookie{
+	c.SetCookie(&http.Cookie{
 		Name:     "session_id",
 		Value:    "",
 		Path:     "/",
@@ -157,19 +133,18 @@ func apiLogoutHandler(w http.ResponseWriter, r *http.Request) {
 		MaxAge:   -1,
 	})
 
-	sendJSON(w, http.StatusOK, APIResponse{Success: true, Message: "Logged out successfully"})
+	return c.JSON(http.StatusOK, APIResponse{Success: true, Message: "Logged out successfully"})
 }
 
-func apiDashboardHandler(w http.ResponseWriter, r *http.Request) {
-	user := getUser(r)
+func apiDashboardHandler(c echo.Context) error {
+	user := getUserFromEcho(c)
 
-	taskCount, err := queries.CountUserTasks(r.Context(), user.ID)
+	taskCount, err := queries.CountUserTasks(c.Request().Context(), user.ID)
 	if err != nil {
-		sendJSON(w, http.StatusInternalServerError, APIResponse{Success: false, Error: "Failed to fetch task count"})
-		return
+		return c.JSON(http.StatusInternalServerError, APIResponse{Success: false, Error: "Failed to fetch task count"})
 	}
 
-	sendJSON(w, http.StatusOK, APIResponse{
+	return c.JSON(http.StatusOK, APIResponse{
 		Success: true,
 		Data: map[string]interface{}{
 			"user":      user,
@@ -178,27 +153,21 @@ func apiDashboardHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func apiRotateAPIKeyHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		sendJSON(w, http.StatusMethodNotAllowed, APIResponse{Success: false, Error: "Method Not Allowed"})
-		return
-	}
-	user := getUser(r)
+func apiRotateAPIKeyHandler(c echo.Context) error {
+	user := getUserFromEcho(c)
 
-	newKey, err := RotateAPIKey(r.Context(), user.ID)
+	newKey, err := RotateAPIKey(c.Request().Context(), user.ID)
 	if err != nil {
-		sendJSON(w, http.StatusInternalServerError, APIResponse{Success: false, Error: "Failed to rotate API key"})
-		return
+		return c.JSON(http.StatusInternalServerError, APIResponse{Success: false, Error: "Failed to rotate API key"})
 	}
 
-	sendJSON(w, http.StatusOK, APIResponse{Success: true, Data: map[string]string{"api_key": newKey}})
+	return c.JSON(http.StatusOK, APIResponse{Success: true, Data: map[string]string{"api_key": newKey}})
 }
 
-func apiMonitorHandler(w http.ResponseWriter, r *http.Request) {
-	rows, err := queries.GetTaskLogs(r.Context())
+func apiMonitorHandler(c echo.Context) error {
+	rows, err := queries.GetTaskLogs(c.Request().Context())
 	if err != nil {
-		sendJSON(w, http.StatusInternalServerError, APIResponse{Success: false, Error: "Failed to fetch logs"})
-		return
+		return c.JSON(http.StatusInternalServerError, APIResponse{Success: false, Error: "Failed to fetch logs"})
 	}
 
 	var logs []TaskLog
@@ -223,14 +192,13 @@ func apiMonitorHandler(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	sendJSON(w, http.StatusOK, APIResponse{Success: true, Data: logs})
+	return c.JSON(http.StatusOK, APIResponse{Success: true, Data: logs})
 }
 
-func apiAdminUsersHandler(w http.ResponseWriter, r *http.Request) {
-	rows, err := queries.ListUsers(r.Context())
+func apiAdminUsersHandler(c echo.Context) error {
+	rows, err := queries.ListUsers(c.Request().Context())
 	if err != nil {
-		sendJSON(w, http.StatusInternalServerError, APIResponse{Success: false, Error: "Failed to fetch users"})
-		return
+		return c.JSON(http.StatusInternalServerError, APIResponse{Success: false, Error: "Failed to fetch users"})
 	}
 
 	var users []User
@@ -245,7 +213,7 @@ func apiAdminUsersHandler(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	sendJSON(w, http.StatusOK, APIResponse{Success: true, Data: users})
+	return c.JSON(http.StatusOK, APIResponse{Success: true, Data: users})
 }
 
 type AdminUpdateUserInput struct {
@@ -254,39 +222,36 @@ type AdminUpdateUserInput struct {
 	Tier   string `json:"tier"`
 }
 
-func apiAdminUpdateUserHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		sendJSON(w, http.StatusMethodNotAllowed, APIResponse{Success: false, Error: "Method Not Allowed"})
-		return
-	}
-
+func apiAdminUpdateUserHandler(c echo.Context) error {
 	var input AdminUpdateUserInput
-	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
-		sendJSON(w, http.StatusBadRequest, APIResponse{Success: false, Error: "Invalid request body"})
-		return
+	if err := c.Bind(&input); err != nil {
+		return c.JSON(http.StatusBadRequest, APIResponse{Success: false, Error: "Invalid request body"})
 	}
 
 	if input.Role != "" {
-		err := queries.UpdateUserRole(r.Context(), db.UpdateUserRoleParams{
+		err := queries.UpdateUserRole(c.Request().Context(), db.UpdateUserRoleParams{
 			Role: pgtype.Text{String: input.Role, Valid: true},
 			ID:   input.UserID,
 		})
 		if err != nil {
-			sendJSON(w, http.StatusInternalServerError, APIResponse{Success: false, Error: "Failed to update user role"})
-			return
+			return c.JSON(http.StatusInternalServerError, APIResponse{Success: false, Error: "Failed to update user role"})
 		}
 	}
 
 	if input.Tier != "" {
-		err := queries.UpdateUserTier(r.Context(), db.UpdateUserTierParams{
+		err := queries.UpdateUserTier(c.Request().Context(), db.UpdateUserTierParams{
 			Tier: pgtype.Text{String: input.Tier, Valid: true},
 			ID:   input.UserID,
 		})
 		if err != nil {
-			sendJSON(w, http.StatusInternalServerError, APIResponse{Success: false, Error: "Failed to update user tier"})
-			return
+			return c.JSON(http.StatusInternalServerError, APIResponse{Success: false, Error: "Failed to update user tier"})
 		}
 	}
 
-	sendJSON(w, http.StatusOK, APIResponse{Success: true, Message: "User updated successfully"})
+	return c.JSON(http.StatusOK, APIResponse{Success: true, Message: "User updated successfully"})
+}
+
+func getUserFromEcho(c echo.Context) *User {
+	user, _ := c.Get("user").(*User)
+	return user
 }
