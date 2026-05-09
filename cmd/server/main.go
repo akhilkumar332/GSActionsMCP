@@ -75,6 +75,14 @@ func main() {
 		csrf.Secure(useSecure),
 		csrf.SameSite(csrf.SameSiteLaxMode),
 		csrf.Path("/"),
+		csrf.TrustedOrigins([]string{"localhost:8080", "127.0.0.1:8080"}),
+		csrf.ErrorHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			log.Printf("CSRF Failure for %s %s: %v", r.Method, r.URL.Path, csrf.FailureReason(r))
+			sendJSON(w, http.StatusForbidden, APIResponse{
+				Success: false,
+				Error:   fmt.Sprintf("Forbidden - CSRF error: %v", csrf.FailureReason(r)),
+			})
+		})),
 	)
 
 	// 2. Initialize MCP Server
