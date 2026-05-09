@@ -122,20 +122,11 @@ func runScheduler(ctx context.Context, s *server.MCPServer) {
 						}
 					}
 
-					// Phase 9.2: Cross-Task Context Check
-					finalPrompt := t.AgentPrompt
-					if t.DependsOnTaskID.Valid {
-						parentOutput, err := queries.GetLatestTaskLogResponse(workerCtx, t.DependsOnTaskID)
-						if err == nil && parentOutput.Valid && parentOutput.String != "" {
-							finalPrompt = fmt.Sprintf("Context from previous task:\n%s\n\nYour Prompt:\n%s", parentOutput.String, t.AgentPrompt)
-						}
-					}
-
 					// Phase 6.1: Publish to Redis Pub/Sub so the correct node with the SSE connection can trigger it
 					executionID := fmt.Sprintf("%s-%d", taskID, time.Now().UTC().UnixNano())
 					payloadBytes, _ := json.Marshal(map[string]interface{}{
 						"task_id":        taskID,
-						"prompt":         finalPrompt,
+						"prompt":         t.AgentPrompt,
 						"execution_id":   executionID,
 						"trigger_type":   t.TriggerType.String,
 						"trigger_config": string(t.TriggerConfig),
@@ -246,6 +237,26 @@ func completeTask(ctx context.Context, taskID string, nextRun time.Time, status 
 	})
 	if err != nil {
 		log.Printf("Error completing task %s: %v", taskID, err)
+		return
+	}
+
+	// Step 1: Trigger dependent tasks immediately
+	dependents, err := queries.GetDependentTasksToTrigger(ctx, tid)
+	if err != nil {
+		log.Printf("Error fetching dependent tasks for %s: %v", taskID, err)
+		return
+	}
+
+	for _, t := range dependents {
+		executionID := fmt.Sprintf("%s-%d", formatUUID(t.ID), time.Now().UTC().UnixNano())
+		payloadBytes, _ := json.Marshal(map[string]interface{}{
+			"task_id":        formatUUID(t.ID),
+			"prompt":         t.AgentPrompt,
+			"execution_id":   executionID,
+			"trigger_type":   t.TriggerType.String,
+			"trigger_config": string(t.TriggerConfig),
+		})
+		_, _ = RedisClient.Publish(ctx, fmt.Sprintf("trigger_task:%s", t.UserID), string(payloadBytes)).Result()
 	}
 }
 

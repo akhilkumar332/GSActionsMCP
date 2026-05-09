@@ -117,8 +117,6 @@ func (sm *SessionManager) MaintainHeartbeat(ctx context.Context, userID string, 
 					workerWG.Add(1)
 					go func(payload string) {
 						defer workerWG.Done()
-						sampleCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-						defer cancel()
 						
 						var taskData map[string]string
 						if err := json.Unmarshal([]byte(payload), &taskData); err != nil {
@@ -132,6 +130,34 @@ func (sm *SessionManager) MaintainHeartbeat(ctx context.Context, userID string, 
 						triggerType := taskData["trigger_type"]
 						triggerConfigStr := taskData["trigger_config"]
 
+						var tid pgtype.UUID
+						_ = parseUUID(taskID, &tid)
+
+						// 1. Fetch task details early (needed for resolvePrompt and metadata)
+						dbCtx, dbCancel := context.WithTimeout(context.Background(), 15*time.Second)
+						defer dbCancel()
+
+						t, err := queries.GetTaskByID(dbCtx, tid)
+						if err != nil {
+							log.Printf("Failed to fetch task %s: %v", taskID, err)
+							return
+						}
+
+						userEmail, _ := queries.GetUserEmail(dbCtx, userID)
+						emailStr := ""
+						if userEmail.Valid {
+							emailStr = userEmail.String
+						}
+
+						// 2. Resolve Prompt (Secrets + Chaining)
+						finalPrompt, err := resolvePrompt(dbCtx, userID, prompt, t.DependsOnTaskID)
+						if err != nil {
+							log.Printf("Prompt resolution failed for task %s: %v", taskID, err)
+						}
+
+						sampleCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+						defer cancel()
+
 						// Phase 10.1: Prevent Double Execution if user is connected from multiple terminals
 						locked, err := sm.redisClient.SetNX(sampleCtx, fmt.Sprintf("lock:exec:%s", executionID), "locked", 5*time.Minute).Result()
 						if err != nil || !locked {
@@ -142,7 +168,7 @@ func (sm *SessionManager) MaintainHeartbeat(ctx context.Context, userID string, 
 						req := mcp.CreateMessageRequest{
 							CreateMessageParams: mcp.CreateMessageParams{
 								Messages: []mcp.SamplingMessage{
-									{Role: "user", Content: mcp.TextContent{Type: "text", Text: prompt}},
+									{Role: "user", Content: mcp.TextContent{Type: "text", Text: finalPrompt}},
 								},
 								MaxTokens: 1000,
 							},
@@ -150,20 +176,6 @@ func (sm *SessionManager) MaintainHeartbeat(ctx context.Context, userID string, 
 
 						// Phase 7.2: Real LLM Response Handling
 						res, err := mcpServer.RequestSampling(sampleCtx, req)
-
-						var tid pgtype.UUID
-						_ = parseUUID(taskID, &tid)
-
-						// Fetch task details for SSE event
-						dbCtx, dbCancel := context.WithTimeout(context.Background(), 15*time.Second)
-						defer dbCancel()
-
-						t, _ := queries.GetTaskByID(dbCtx, tid)
-						userEmail, _ := queries.GetUserEmail(dbCtx, userID)
-						emailStr := ""
-						if userEmail.Valid {
-							emailStr = userEmail.String
-						}
 
 						if err != nil {
 							log.Printf("Pub/Sub Sampling failed for user %s: %v", userID, err)

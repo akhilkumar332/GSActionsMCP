@@ -38,11 +38,15 @@ CREATE TABLE tasks (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     requires_approval BOOLEAN DEFAULT FALSE,
     encrypted_secrets BYTEA,
-    last_approval_status VARCHAR(20) -- 'pending', 'approved', 'denied'
+    last_approval_status VARCHAR(20), -- 'pending', 'approved', 'denied'
+    trigger_on_completion BOOLEAN DEFAULT FALSE
 );
 
 -- Index for high-speed polling
 CREATE INDEX idx_tasks_next_run_status ON tasks (next_run, status) WHERE status = 'active';
+
+-- Phase 3.2: Chaining optimization
+CREATE INDEX idx_tasks_depends_on ON tasks (depends_on_task_id) WHERE trigger_on_completion = TRUE;
 
 -- Phase 1.2: Execution Logging
 CREATE TABLE task_logs (

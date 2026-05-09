@@ -28,7 +28,7 @@ func (q *Queries) CheckTaskOwnership(ctx context.Context, arg CheckTaskOwnership
 }
 
 const claimDueTasks = `-- name: ClaimDueTasks :many
-SELECT id, user_id, name, trigger_type, trigger_config, agent_prompt, status, locked_by, next_run, last_run, failure_count, missed_task_policy, depends_on_task_id, created_at, requires_approval, encrypted_secrets, last_approval_status FROM fn_claim_due_tasks($1, $2)
+SELECT id, user_id, name, trigger_type, trigger_config, agent_prompt, status, locked_by, next_run, last_run, failure_count, missed_task_policy, depends_on_task_id, created_at, requires_approval, encrypted_secrets, last_approval_status, trigger_on_completion FROM fn_claim_due_tasks($1, $2)
 `
 
 type ClaimDueTasksParams struct {
@@ -63,6 +63,7 @@ func (q *Queries) ClaimDueTasks(ctx context.Context, arg ClaimDueTasksParams) ([
 			&i.RequiresApproval,
 			&i.EncryptedSecrets,
 			&i.LastApprovalStatus,
+			&i.TriggerOnCompletion,
 		); err != nil {
 			return nil, err
 		}
@@ -101,22 +102,23 @@ func (q *Queries) CountUserTasks(ctx context.Context, userID string) (int64, err
 }
 
 const createTask = `-- name: CreateTask :one
-INSERT INTO tasks (user_id, name, trigger_type, trigger_config, agent_prompt, missed_task_policy, depends_on_task_id, next_run, requires_approval, encrypted_secrets) 
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) 
-RETURNING id, user_id, name, trigger_type, trigger_config, agent_prompt, status, locked_by, next_run, last_run, failure_count, missed_task_policy, depends_on_task_id, created_at, requires_approval, encrypted_secrets, last_approval_status
+INSERT INTO tasks (user_id, name, trigger_type, trigger_config, agent_prompt, missed_task_policy, depends_on_task_id, next_run, requires_approval, encrypted_secrets, trigger_on_completion) 
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) 
+RETURNING id, user_id, name, trigger_type, trigger_config, agent_prompt, status, locked_by, next_run, last_run, failure_count, missed_task_policy, depends_on_task_id, created_at, requires_approval, encrypted_secrets, last_approval_status, trigger_on_completion
 `
 
 type CreateTaskParams struct {
-	UserID           string
-	Name             string
-	TriggerType      pgtype.Text
-	TriggerConfig    []byte
-	AgentPrompt      string
-	MissedTaskPolicy pgtype.Text
-	DependsOnTaskID  pgtype.UUID
-	NextRun          pgtype.Timestamptz
-	RequiresApproval pgtype.Bool
-	EncryptedSecrets []byte
+	UserID              string
+	Name                string
+	TriggerType         pgtype.Text
+	TriggerConfig       []byte
+	AgentPrompt         string
+	MissedTaskPolicy    pgtype.Text
+	DependsOnTaskID     pgtype.UUID
+	NextRun             pgtype.Timestamptz
+	RequiresApproval    pgtype.Bool
+	EncryptedSecrets    []byte
+	TriggerOnCompletion pgtype.Bool
 }
 
 func (q *Queries) CreateTask(ctx context.Context, arg CreateTaskParams) (Task, error) {
@@ -131,6 +133,7 @@ func (q *Queries) CreateTask(ctx context.Context, arg CreateTaskParams) (Task, e
 		arg.NextRun,
 		arg.RequiresApproval,
 		arg.EncryptedSecrets,
+		arg.TriggerOnCompletion,
 	)
 	var i Task
 	err := row.Scan(
@@ -151,6 +154,7 @@ func (q *Queries) CreateTask(ctx context.Context, arg CreateTaskParams) (Task, e
 		&i.RequiresApproval,
 		&i.EncryptedSecrets,
 		&i.LastApprovalStatus,
+		&i.TriggerOnCompletion,
 	)
 	return i, err
 }
@@ -288,6 +292,54 @@ func (q *Queries) GetAuthInfoByEmail(ctx context.Context, email pgtype.Text) (Ge
 	return i, err
 }
 
+const getDependentTasksToTrigger = `-- name: GetDependentTasksToTrigger :many
+SELECT t.id, t.user_id, t.name, t.trigger_type, t.trigger_config, t.agent_prompt, t.status, t.locked_by, t.next_run, t.last_run, t.failure_count, t.missed_task_policy, t.depends_on_task_id, t.created_at, t.requires_approval, t.encrypted_secrets, t.last_approval_status, t.trigger_on_completion FROM tasks t
+INNER JOIN tasks parent ON t.depends_on_task_id = parent.id
+WHERE t.depends_on_task_id = $1 
+  AND t.trigger_on_completion = TRUE 
+  AND t.status = 'active'
+  AND t.user_id = parent.user_id
+`
+
+func (q *Queries) GetDependentTasksToTrigger(ctx context.Context, dependsOnTaskID pgtype.UUID) ([]Task, error) {
+	rows, err := q.db.Query(ctx, getDependentTasksToTrigger, dependsOnTaskID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Task
+	for rows.Next() {
+		var i Task
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.Name,
+			&i.TriggerType,
+			&i.TriggerConfig,
+			&i.AgentPrompt,
+			&i.Status,
+			&i.LockedBy,
+			&i.NextRun,
+			&i.LastRun,
+			&i.FailureCount,
+			&i.MissedTaskPolicy,
+			&i.DependsOnTaskID,
+			&i.CreatedAt,
+			&i.RequiresApproval,
+			&i.EncryptedSecrets,
+			&i.LastApprovalStatus,
+			&i.TriggerOnCompletion,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getLatestTaskLogResponse = `-- name: GetLatestTaskLogResponse :one
 SELECT llm_response FROM task_logs 
 WHERE task_id = $1 
@@ -303,7 +355,7 @@ func (q *Queries) GetLatestTaskLogResponse(ctx context.Context, taskID pgtype.UU
 }
 
 const getTaskByID = `-- name: GetTaskByID :one
-SELECT id, user_id, name, trigger_type, trigger_config, agent_prompt, status, locked_by, next_run, last_run, failure_count, missed_task_policy, depends_on_task_id, created_at, requires_approval, encrypted_secrets, last_approval_status FROM tasks WHERE id = $1
+SELECT id, user_id, name, trigger_type, trigger_config, agent_prompt, status, locked_by, next_run, last_run, failure_count, missed_task_policy, depends_on_task_id, created_at, requires_approval, encrypted_secrets, last_approval_status, trigger_on_completion FROM tasks WHERE id = $1
 `
 
 func (q *Queries) GetTaskByID(ctx context.Context, id pgtype.UUID) (Task, error) {
@@ -327,6 +379,7 @@ func (q *Queries) GetTaskByID(ctx context.Context, id pgtype.UUID) (Task, error)
 		&i.RequiresApproval,
 		&i.EncryptedSecrets,
 		&i.LastApprovalStatus,
+		&i.TriggerOnCompletion,
 	)
 	return i, err
 }
@@ -504,18 +557,19 @@ func (q *Queries) ListUserSecrets(ctx context.Context, userID string) ([]ListUse
 }
 
 const listUserTasks = `-- name: ListUserTasks :many
-SELECT id, name, trigger_type, status, next_run, requires_approval, encrypted_secrets, last_approval_status FROM tasks WHERE user_id = $1
+SELECT id, name, trigger_type, status, next_run, requires_approval, encrypted_secrets, last_approval_status, trigger_on_completion FROM tasks WHERE user_id = $1
 `
 
 type ListUserTasksRow struct {
-	ID                 pgtype.UUID
-	Name               string
-	TriggerType        pgtype.Text
-	Status             pgtype.Text
-	NextRun            pgtype.Timestamptz
-	RequiresApproval   pgtype.Bool
-	EncryptedSecrets   []byte
-	LastApprovalStatus pgtype.Text
+	ID                  pgtype.UUID
+	Name                string
+	TriggerType         pgtype.Text
+	Status              pgtype.Text
+	NextRun             pgtype.Timestamptz
+	RequiresApproval    pgtype.Bool
+	EncryptedSecrets    []byte
+	LastApprovalStatus  pgtype.Text
+	TriggerOnCompletion pgtype.Bool
 }
 
 func (q *Queries) ListUserTasks(ctx context.Context, userID string) ([]ListUserTasksRow, error) {
@@ -536,6 +590,7 @@ func (q *Queries) ListUserTasks(ctx context.Context, userID string) ([]ListUserT
 			&i.RequiresApproval,
 			&i.EncryptedSecrets,
 			&i.LastApprovalStatus,
+			&i.TriggerOnCompletion,
 		); err != nil {
 			return nil, err
 		}

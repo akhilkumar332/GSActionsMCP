@@ -92,15 +92,23 @@ WHERE status = 'processing' AND next_run < NOW() - INTERVAL '5 minutes';
 SELECT EXISTS(SELECT 1 FROM tasks WHERE id = $1 AND user_id = $2);
 
 -- name: CreateTask :one
-INSERT INTO tasks (user_id, name, trigger_type, trigger_config, agent_prompt, missed_task_policy, depends_on_task_id, next_run, requires_approval, encrypted_secrets) 
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) 
+INSERT INTO tasks (user_id, name, trigger_type, trigger_config, agent_prompt, missed_task_policy, depends_on_task_id, next_run, requires_approval, encrypted_secrets, trigger_on_completion) 
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) 
 RETURNING *;
 
 -- name: ListUserTasks :many
-SELECT id, name, trigger_type, status, next_run, requires_approval, encrypted_secrets, last_approval_status FROM tasks WHERE user_id = $1;
+SELECT id, name, trigger_type, status, next_run, requires_approval, encrypted_secrets, last_approval_status, trigger_on_completion FROM tasks WHERE user_id = $1;
 
 -- name: GetTaskByID :one
 SELECT * FROM tasks WHERE id = $1;
+
+-- name: GetDependentTasksToTrigger :many
+SELECT t.* FROM tasks t
+INNER JOIN tasks parent ON t.depends_on_task_id = parent.id
+WHERE t.depends_on_task_id = $1 
+  AND t.trigger_on_completion = TRUE 
+  AND t.status = 'active'
+  AND t.user_id = parent.user_id;
 
 -- name: UpdateTaskApprovalStatus :exec
 UPDATE tasks SET last_approval_status = $1, status = $2, locked_by = NULL WHERE id = $3 AND user_id = $4;
