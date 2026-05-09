@@ -1,6 +1,6 @@
 import { useAuth } from '../context/AuthContext';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Activity, Users, LogOut, Clock, Search } from 'lucide-react';
+import { LayoutDashboard, Activity, Users, LogOut, Clock, Search, Key } from 'lucide-react';
 
 const DashboardLayout = ({ children }) => {
   const { user, logout } = useAuth();
@@ -14,6 +14,7 @@ const DashboardLayout = ({ children }) => {
 
   const navItems = [
     { icon: LayoutDashboard, label: 'Dashboard', path: '/dashboard', roles: ['user', 'staff', 'admin'] },
+    { icon: Key, label: 'Vault', path: '/vault', roles: ['user', 'staff', 'admin'] },
     { icon: Activity, label: 'System Monitor', path: '/monitor', roles: ['staff', 'admin'] },
     { icon: Users, label: 'User Management', path: '/admin/users', roles: ['admin'] },
     { icon: Search, label: 'SEO Manager', path: '/admin/seo', roles: ['admin'] },

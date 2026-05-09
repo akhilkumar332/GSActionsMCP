@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import DashboardLayout from '../components/DashboardLayout';
 import axios from 'axios';
-import { Terminal, ShieldAlert, CheckCircle2, Clock, Cpu } from 'lucide-react';
+import { Terminal, ShieldAlert, CheckCircle2, Clock, Cpu, Link, Key } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useSSE } from '../hooks/useSSE';
 
@@ -105,6 +105,13 @@ const Monitor = () => {
                     <div className="flex items-center gap-2">
                        <Cpu size={12} className="text-slate-600" />
                        <span className="text-slate-200 font-bold">{log.task_name}</span>
+                       {log.chained && <Link size={12} className="text-blue-400" title="Chained Context" />}
+                       {log.secrets_injected > 0 && (
+                         <div className="flex items-center gap-0.5" title={`${log.secrets_injected} secrets injected`}>
+                            <Key size={12} className="text-amber-400" />
+                            <span className="text-[9px] text-amber-400/80 font-black">{log.secrets_injected}</span>
+                         </div>
+                       )}
                     </div>
                   </td>
                   <td className="px-6 py-5">

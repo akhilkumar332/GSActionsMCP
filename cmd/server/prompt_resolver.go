@@ -11,9 +11,10 @@ import (
 
 var secretRegex = regexp.MustCompile(`\{\{secrets\.([a-zA-Z0-9_-]+)\}\}`)
 
-func resolvePrompt(ctx context.Context, userID string, rawPrompt string, parentTaskID pgtype.UUID) (string, error) {
+func resolvePrompt(ctx context.Context, userID string, rawPrompt string, parentTaskID pgtype.UUID) (string, int, bool, error) {
 	resolved := rawPrompt
 	resolvedSecrets := make(map[string]string)
+	secretCount := 0
 
 	// 1. Resolve Secrets: {{secrets.NAME}}
 	// Find all matches, fetch from db, decrypt, replace
@@ -51,17 +52,20 @@ func resolvePrompt(ctx context.Context, userID string, rawPrompt string, parentT
 
 		val := string(decryptedVal)
 		resolvedSecrets[secretName] = val
+		secretCount++
 		return val
 	})
 
+	chained := false
 	// 2. Resolve Chaining Context
 	if parentTaskID.Valid {
 		parentOutput, err := queries.GetLatestTaskLogResponse(ctx, parentTaskID)
 		if err == nil && parentOutput.Valid && parentOutput.String != "" {
 			// Prepend context
 			resolved = fmt.Sprintf("Context from previous task:\n%s\n\nYour Prompt:\n%s", parentOutput.String, resolved)
+			chained = true
 		}
 	}
 
-	return resolved, nil
+	return resolved, secretCount, chained, nil
 }

@@ -157,6 +157,7 @@ func main() {
 	api.POST("/tasks/:id/approve", apiApproveTaskHandler)
 	api.POST("/tasks/:id/deny", apiDenyTaskHandler)
 	api.GET("/secrets", apiListSecretsHandler)
+	api.POST("/secrets", apiUpsertSecretHandler)
 	api.DELETE("/secrets/:name", apiDeleteSecretHandler)
 	
 	staff := api.Group("", EchoRequireRole("staff", "admin"))

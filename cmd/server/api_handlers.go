@@ -318,6 +318,39 @@ func apiDeleteSecretHandler(c echo.Context) error {
 	return c.JSON(http.StatusOK, APIResponse{Success: true, Message: "Secret deleted"})
 }
 
+type UpsertSecretInput struct {
+	Name  string `json:"name"`
+	Value string `json:"value"`
+}
+
+func apiUpsertSecretHandler(c echo.Context) error {
+	user := getUserFromEcho(c)
+	var input UpsertSecretInput
+	if err := c.Bind(&input); err != nil {
+		return c.JSON(http.StatusBadRequest, APIResponse{Success: false, Error: "Invalid request body"})
+	}
+
+	if input.Name == "" || input.Value == "" {
+		return c.JSON(http.StatusBadRequest, APIResponse{Success: false, Error: "Name and value are required"})
+	}
+
+	encrypted, err := Encrypt([]byte(input.Value))
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, APIResponse{Success: false, Error: "Encryption error"})
+	}
+
+	_, err = queries.UpsertUserSecret(c.Request().Context(), db.UpsertUserSecretParams{
+		UserID:         user.ID,
+		Name:           input.Name,
+		EncryptedValue: encrypted,
+	})
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, APIResponse{Success: false, Error: "Failed to store secret"})
+	}
+
+	return c.JSON(http.StatusOK, APIResponse{Success: true, Message: "Secret stored successfully"})
+}
+
 func getUserFromEcho(c echo.Context) *User {
 	user, _ := c.Get("user").(*User)
 	return user

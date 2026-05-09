@@ -4,6 +4,7 @@ import Landing from './pages/Landing';
 import Login from './pages/Login';
 import Signup from './pages/Signup';
 import Dashboard from './pages/Dashboard';
+import Vault from './pages/Vault';
 import Monitor from './pages/Monitor';
 import AdminUsers from './pages/AdminUsers';
 import AdminSEO from './pages/AdminSEO';
@@ -64,6 +65,15 @@ function App() {
             element={
               <ProtectedRoute roles={['user', 'staff', 'admin']}>
                 <Dashboard />
+              </ProtectedRoute>
+            } 
+          />
+
+          <Route 
+            path="/vault" 
+            element={
+              <ProtectedRoute roles={['user', 'staff', 'admin']}>
+                <Vault />
               </ProtectedRoute>
             } 
           />

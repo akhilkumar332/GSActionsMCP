@@ -150,7 +150,7 @@ func (sm *SessionManager) MaintainHeartbeat(ctx context.Context, userID string, 
 						}
 
 						// 2. Resolve Prompt (Secrets + Chaining)
-						finalPrompt, err := resolvePrompt(dbCtx, userID, prompt, t.DependsOnTaskID)
+						finalPrompt, secretCount, chained, err := resolvePrompt(dbCtx, userID, prompt, t.DependsOnTaskID)
 						if err != nil {
 							log.Printf("Prompt resolution failed for task %s: %v", taskID, err)
 						}
@@ -190,13 +190,15 @@ func (sm *SessionManager) MaintainHeartbeat(ctx context.Context, userID string, 
 							
 							// Emit Redis event
 							evtPayload, _ := json.Marshal(map[string]interface{}{
-								"id":             formatUUID(logID),
-								"task_id":        taskID,
-								"status":         "failure",
-								"execution_time": time.Now().Format(time.RFC3339),
-								"task_name":      t.Name,
-								"user_email":     emailStr,
-								"error_message":  err.Error(),
+								"id":               formatUUID(logID),
+								"task_id":          taskID,
+								"status":           "failure",
+								"execution_time":   time.Now().Format(time.RFC3339),
+								"task_name":        t.Name,
+								"user_email":       emailStr,
+								"error_message":    err.Error(),
+								"secrets_injected": secretCount,
+								"chained":          chained,
 							})
 							_ = PublishEvent(dbCtx, PubSubEvent{
 								UserID:    userID,
@@ -243,13 +245,15 @@ func (sm *SessionManager) MaintainHeartbeat(ctx context.Context, userID string, 
 
 						// Emit Redis event
 						evtPayload, _ := json.Marshal(map[string]interface{}{
-							"id":             formatUUID(logID),
-							"task_id":        taskID,
-							"status":         "success",
-							"execution_time": time.Now().Format(time.RFC3339),
-							"task_name":      t.Name,
-							"user_email":     emailStr,
-							"llm_response":   llmResponse,
+							"id":               formatUUID(logID),
+							"task_id":          taskID,
+							"status":           "success",
+							"execution_time":   time.Now().Format(time.RFC3339),
+							"task_name":        t.Name,
+							"user_email":       emailStr,
+							"llm_response":     llmResponse,
+							"secrets_injected": secretCount,
+							"chained":          chained,
 						})
 						_ = PublishEvent(dbCtx, PubSubEvent{
 							UserID:    userID,
