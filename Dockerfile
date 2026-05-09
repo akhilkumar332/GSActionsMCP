@@ -23,9 +23,12 @@ RUN apk add --no-cache ca-certificates
 COPY --from=backend-builder /app/server ./
 COPY --from=frontend-builder /app/frontend/dist ./frontend/dist
 COPY schema.sql ./
+# Copy static files if they are still used (though mostly for favicon/legacy)
+COPY static/ ./static/
 
 # Environment variables
 ENV PORT=8080
+ENV ENV=production
 EXPOSE 8080
 
 CMD ["./server"]

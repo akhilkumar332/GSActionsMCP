@@ -12,7 +12,7 @@ const Monitor = () => {
       try {
         const res = await axios.get('/api/monitor');
         if (res.data.success) {
-          setLogs(res.data.data.Logs || []);
+          setLogs(res.data.data || []);
         }
       } catch (err) {
         console.error('Failed to fetch logs', err);

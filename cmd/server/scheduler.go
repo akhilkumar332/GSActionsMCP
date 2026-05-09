@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -59,10 +60,10 @@ func runScheduler(ctx context.Context, s *server.MCPServer) {
 					// Phase 9.2: Cross-Task Context Check
 					finalPrompt := t.AgentPrompt
 					if t.DependsOnTaskID != nil {
-						var parentOutput string
+						var parentOutput sql.NullString
 						err := dbPool.QueryRow(workerCtx, "SELECT llm_response FROM task_logs WHERE task_id = $1 ORDER BY execution_time DESC LIMIT 1", *t.DependsOnTaskID).Scan(&parentOutput)
-						if err == nil && parentOutput != "" {
-							finalPrompt = fmt.Sprintf("Context from previous task:\n%s\n\nYour Prompt:\n%s", parentOutput, t.AgentPrompt)
+						if err == nil && parentOutput.Valid && parentOutput.String != "" {
+							finalPrompt = fmt.Sprintf("Context from previous task:\n%s\n\nYour Prompt:\n%s", parentOutput.String, t.AgentPrompt)
 						}
 					}
 

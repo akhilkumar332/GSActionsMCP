@@ -15,7 +15,7 @@ const Dashboard = () => {
       try {
         const res = await axios.get('/api/dashboard');
         if (res.data.success) {
-          setTaskCount(res.data.data.TaskCount);
+          setTaskCount(res.data.data.taskCount);
         }
       } catch (err) {
         console.error('Failed to fetch dashboard data', err);

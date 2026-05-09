@@ -11,7 +11,7 @@ const AdminUsers = () => {
     try {
       const res = await axios.get('/api/admin/users');
       if (res.data.success) {
-        setUsers(res.data.data.Users || []);
+        setUsers(res.data.data || []);
       }
     } catch (err) {
       console.error('Failed to fetch users', err);

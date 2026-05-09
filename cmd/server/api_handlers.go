@@ -5,7 +5,14 @@ import (
 	"net/http"
 	"os"
 	"time"
+
+	"github.com/gorilla/csrf"
 )
+
+type AuthInput struct {
+	Email    string `json:"email"`
+	Password string `json:"password"`
+}
 
 func sendJSON(w http.ResponseWriter, status int, data interface{}) {
 	w.Header().Set("Content-Type", "application/json")
@@ -16,15 +23,18 @@ func sendJSON(w http.ResponseWriter, status int, data interface{}) {
 }
 
 type APIResponse struct {
-	Success bool        `json:"success"`
-	Message string      `json:"message,omitempty"`
-	Data    interface{} `json:"data,omitempty"`
-	Error   string      `json:"error,omitempty"`
+	Success   bool        `json:"success"`
+	Message   string      `json:"message,omitempty"`
+	Data      interface{} `json:"data,omitempty"`
+	Error     string      `json:"error,omitempty"`
+	CSRFToken string      `json:"csrfToken,omitempty"`
 }
 
-type AuthInput struct {
-	Email    string `json:"email"`
-	Password string `json:"password"`
+func apiCSRFHandler(w http.ResponseWriter, r *http.Request) {
+	sendJSON(w, http.StatusOK, APIResponse{
+		Success:   true,
+		CSRFToken: csrf.Token(r),
+	})
 }
 
 func apiSignupHandler(w http.ResponseWriter, r *http.Request) {
@@ -45,7 +55,11 @@ func apiSignupHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sendJSON(w, http.StatusCreated, APIResponse{Success: true, Data: user})
+	sendJSON(w, http.StatusCreated, APIResponse{
+		Success:   true,
+		Data:      user,
+		CSRFToken: csrf.Token(r),
+	})
 }
 
 func apiLoginHandler(w http.ResponseWriter, r *http.Request) {
@@ -88,7 +102,11 @@ func apiLoginHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sendJSON(w, http.StatusOK, APIResponse{Success: true, Data: user})
+	sendJSON(w, http.StatusOK, APIResponse{
+		Success:   true,
+		Data:      user,
+		CSRFToken: csrf.Token(r),
+	})
 }
 
 func apiLogoutHandler(w http.ResponseWriter, r *http.Request) {
