@@ -7,6 +7,7 @@ import Signup from './pages/Signup';
 import Dashboard from './pages/Dashboard';
 import Monitor from './pages/Monitor';
 import AdminUsers from './pages/AdminUsers';
+import { DevOverview, ProtocolSpec, DevGuide } from './pages/Docs';
 
 const ProtectedRoute = ({ children, roles }) => {
   const { user, loading } = useAuth();
@@ -39,6 +40,16 @@ function App() {
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Signup />} />
           
+          {/* Documentation Routes */}
+          <Route path="/docs/overview" element={<DevOverview />} />
+          <Route path="/docs/protocol-spec" element={<ProtocolSpec />} />
+          <Route path="/docs/quickstart" element={<DevGuide />} />
+          <Route path="/docs/concepts" element={<DevOverview />} />
+          <Route path="/docs/api-reference" element={<DevGuide />} />
+          <Route path="/docs/architecture" element={<DevOverview />} />
+          <Route path="/docs/installation" element={<DevOverview />} />
+          <Route path="/docs/security" element={<ProtocolSpec />} />
+
           <Route 
             path="/dashboard" 
             element={
