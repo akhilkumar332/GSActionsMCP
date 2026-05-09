@@ -4,6 +4,7 @@
   --color-paper-50: #faf9f5;
   --color-ink-900: #141413;
   --color-accent-orange: #d97706;
+  --font-sans: "Poppins", ui-sans-serif, system-ui, sans-serif;
 }
 
 :root {
