@@ -1,24 +1,24 @@
-import React from 'react';
-import { Check, Zap, Rocket, Shield, Crown } from 'lucide-react';
+import { Check, Zap, Rocket, Shield } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { motion } from 'framer-motion';
 
 const Pricing = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
 
   const handleUpgrade = async () => {
     if (!user) {
-      window.location.href = '/login';
+      navigate('/login');
       return;
     }
     try {
       const res = await axios.post('/api/billing/create-checkout-session');
       if (res.data.success && res.data.data.url) {
-        window.location.href = res.data.data.url;
+        window.location.assign(res.data.data.url);
       }
-    } catch (err) {
-      console.error('Upgrade error', err);
+    } catch {
       alert('Failed to initiate upgrade');
     }
   };

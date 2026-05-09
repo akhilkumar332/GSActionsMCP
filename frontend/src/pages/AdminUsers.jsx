@@ -1,7 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import DashboardLayout from '../components/DashboardLayout';
 import axios from 'axios';
-import { UserCog, Shield, Star, UserCircle, Search, Filter } from 'lucide-react';
+import { UserCog, Shield, Star, UserCircle, Search } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 const AdminUsers = () => {
@@ -14,22 +14,25 @@ const AdminUsers = () => {
       if (res.data.success) {
         setUsers(res.data.data || []);
       }
-    } catch (err) {
-      console.error('Failed to fetch users', err);
+    } catch {
+      console.error('Failed to fetch users');
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchUsers();
+    const init = async () => {
+      await fetchUsers();
+    };
+    init();
   }, []);
 
   const handleUpdate = async (userId, role, tier) => {
     try {
       await axios.post('/api/admin/users/update', { user_id: userId, role, tier });
       await fetchUsers();
-    } catch (err) {
+    } catch {
       alert('Failed to update user');
     }
   };

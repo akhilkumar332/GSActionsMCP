@@ -240,10 +240,14 @@ func registerTools(s *server.MCPServer) {
 		}
 
 		// Emit Redis event
+		evtPayload, _ := json.Marshal(map[string]interface{}{
+			"task_id": id,
+			"status":  StatusPaused,
+		})
 		_ = PublishEvent(ctx, PubSubEvent{
 			UserID:    userID,
 			EventType: "task_status_changed",
-			Payload:   fmt.Sprintf(`{"task_id":"%s", "status":"%s"}`, id, StatusPaused),
+			Payload:   string(evtPayload),
 		})
 
 		resBytes, _ := json.Marshal(map[string]string{"status": StatusPaused})
@@ -283,10 +287,11 @@ func registerTools(s *server.MCPServer) {
 		}
 
 		// Emit Redis event
+		payload, _ := json.Marshal(map[string]string{"task_id": id, "status": StatusActive})
 		_ = PublishEvent(ctx, PubSubEvent{
 			UserID:    userID,
 			EventType: "task_status_changed",
-			Payload:   fmt.Sprintf(`{"task_id":"%s", "status":"%s"}`, id, StatusActive),
+			Payload:   string(payload),
 		})
 
 		resBytes, _ := json.Marshal(map[string]string{"status": StatusActive})

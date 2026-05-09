@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
@@ -178,10 +177,19 @@ func (sm *SessionManager) MaintainHeartbeat(ctx context.Context, userID string, 
 							})
 							
 							// Emit Redis event
+							evtPayload, _ := json.Marshal(map[string]interface{}{
+								"id":             formatUUID(logID),
+								"task_id":        taskID,
+								"status":         "failure",
+								"execution_time": time.Now().Format(time.RFC3339),
+								"task_name":      t.Name,
+								"user_email":     emailStr,
+								"error_message":  err.Error(),
+							})
 							_ = PublishEvent(dbCtx, PubSubEvent{
 								UserID:    userID,
 								EventType: "task_executed",
-								Payload:   fmt.Sprintf(`{"id":"%s", "task_id":"%s", "status":"failure", "execution_time":"%s", "task_name":"%s", "user_email":"%s", "error_message":"%s"}`, formatUUID(logID), taskID, time.Now().Format(time.RFC3339), t.Name, emailStr, strings.ReplaceAll(err.Error(), `"`, `'`)),
+								Payload:   string(evtPayload),
 							})
 							
 							// Increment failure count securely
@@ -222,10 +230,19 @@ func (sm *SessionManager) MaintainHeartbeat(ctx context.Context, userID string, 
 						})
 
 						// Emit Redis event
+						evtPayload, _ := json.Marshal(map[string]interface{}{
+							"id":             formatUUID(logID),
+							"task_id":        taskID,
+							"status":         "success",
+							"execution_time": time.Now().Format(time.RFC3339),
+							"task_name":      t.Name,
+							"user_email":     emailStr,
+							"llm_response":   llmResponse,
+						})
 						_ = PublishEvent(dbCtx, PubSubEvent{
 							UserID:    userID,
 							EventType: "task_executed",
-							Payload:   fmt.Sprintf(`{"id":"%s", "task_id":"%s", "status":"success", "execution_time":"%s", "task_name":"%s", "user_email":"%s", "llm_response":"%s"}`, formatUUID(logID), taskID, time.Now().Format(time.RFC3339), t.Name, emailStr, strings.ReplaceAll(llmResponse, `"`, `'`)),
+							Payload:   string(evtPayload),
 						})
 
 						// Iteration 2: Advance the task status

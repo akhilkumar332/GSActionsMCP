@@ -1,5 +1,4 @@
-import React from 'react';
-import { Layers, Shield, Zap, Globe, RefreshCcw, Database, Cpu, Server, Repeat } from 'lucide-react';
+import { Layers, Shield, Zap, Cpu, Repeat } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 const Features = () => {

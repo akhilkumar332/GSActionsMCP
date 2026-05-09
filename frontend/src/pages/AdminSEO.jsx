@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import DashboardLayout from '../components/DashboardLayout';
 import axios from 'axios';
 import { Search, Save, Globe, Image as ImageIcon, Layout as LayoutIcon, FileText } from 'lucide-react';
@@ -43,7 +43,7 @@ const AdminSEO = () => {
     try {
       await axios.post('/api/admin/seo', settings);
       setMessage({ type: 'success', text: 'SEO configuration published to edge nodes successfully.' });
-    } catch (err) {
+    } catch {
       setMessage({ type: 'error', text: 'Failed to update SEO configuration.' });
     } finally {
       setSaving(false);
@@ -170,3 +170,4 @@ const AdminSEO = () => {
 };
 
 export default AdminSEO;
+

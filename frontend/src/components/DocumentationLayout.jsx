@@ -1,4 +1,3 @@
-import React from 'react';
 import { NavLink } from 'react-router-dom';
 import { Book, Code, Terminal, FileJson, Info, Zap, Shield, Workflow } from 'lucide-react';
 

@@ -1,4 +1,4 @@
-import React, { createContext, useState, useContext, useEffect } from 'react';
+import { createContext, useState, useContext, useEffect, useCallback } from 'react';
 import axios from 'axios';
 
 const AuthContext = createContext(null);
@@ -11,7 +11,7 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
   const [csrfToken, setCsrfToken] = useState(null);
 
-  const fetchCsrfToken = async () => {
+  const fetchCsrfToken = useCallback(async () => {
     try {
       const res = await axios.get('/api/auth/csrf');
       if (res.data.success) {
@@ -19,19 +19,14 @@ export const AuthProvider = ({ children }) => {
         axios.defaults.headers.common['X-CSRF-Token'] = res.data.csrfToken;
         return res.data.csrfToken;
       }
-    } catch (err) {
-      console.error('Failed to fetch CSRF token', err);
+    } catch {
+      console.error('Failed to fetch CSRF token');
     }
     return null;
-  };
+  }, []);
 
-  const checkAuth = async () => {
+  const checkAuth = useCallback(async () => {
     try {
-      if (!csrfToken) {
-        const token = await fetchCsrfToken();
-        if (!token) return;
-      }
-      
       const res = await axios.get('/api/dashboard');
       if (res.data.success) {
         setUser(res.data.data.user);
@@ -43,7 +38,7 @@ export const AuthProvider = ({ children }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     // Setup interceptor for CSRF auto-refresh
@@ -63,9 +58,14 @@ export const AuthProvider = ({ children }) => {
       }
     );
 
-    checkAuth();
+    const initAuth = async () => {
+       await fetchCsrfToken();
+       await checkAuth();
+    };
+    initAuth();
+
     return () => axios.interceptors.response.eject(interceptor);
-  }, []);
+  }, [checkAuth, fetchCsrfToken]);
 
   const login = async (email, password) => {
     try {
@@ -117,4 +117,5 @@ export const AuthProvider = ({ children }) => {
   );
 };
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const useAuth = () => useContext(AuthContext);

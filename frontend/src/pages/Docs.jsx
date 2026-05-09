@@ -1,4 +1,3 @@
-import React from 'react';
 import DocumentationLayout from '../components/DocumentationLayout';
 import { Terminal, Shield, Zap, Globe, Layers, Settings, Database, Code } from 'lucide-react';
 

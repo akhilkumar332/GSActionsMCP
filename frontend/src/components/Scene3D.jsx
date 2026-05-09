@@ -1,7 +1,17 @@
-import React, { useRef, useMemo } from 'react';
+import { useRef, useMemo } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
-import { Float, MeshDistortMaterial, Sphere, Points, PointMaterial, Center } from '@react-three/drei';
+import { Float, MeshDistortMaterial, Sphere, Points, PointMaterial } from '@react-three/drei';
 import * as THREE from 'three';
+
+const generateParticles = (count) => {
+  const p = new Float32Array(count * 3);
+  for (let i = 0; i < count; i++) {
+    p[i * 3] = (Math.random() - 0.5) * 15;
+    p[i * 3 + 1] = (Math.random() - 0.5) * 15;
+    p[i * 3 + 2] = (Math.random() - 0.5) * 15;
+  }
+  return p;
+};
 
 const NeuralCore = () => {
   const coreRef = useRef();
@@ -45,15 +55,7 @@ const NeuralCore = () => {
 };
 
 const ParticleField = ({ count = 2000 }) => {
-  const points = useMemo(() => {
-    const p = new Float32Array(count * 3);
-    for (let i = 0; i < count; i++) {
-      p[i * 3] = (Math.random() - 0.5) * 15;
-      p[i * 3 + 1] = (Math.random() - 0.5) * 15;
-      p[i * 3 + 2] = (Math.random() - 0.5) * 15;
-    }
-    return p;
-  }, [count]);
+  const points = useMemo(() => generateParticles(count), [count]);
 
   const pointsRef = useRef();
 

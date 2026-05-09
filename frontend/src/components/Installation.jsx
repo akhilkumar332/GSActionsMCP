@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Terminal, Copy, Check, ExternalLink, Cpu, Layout, Boxes } from 'lucide-react';
+import { useState } from 'react';
+import { Terminal, Copy, Check, ExternalLink, Layout, Boxes } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 const Installation = () => {

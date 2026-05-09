@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import DashboardLayout from '../components/DashboardLayout';
 import axios from 'axios';
@@ -20,8 +20,8 @@ const Dashboard = () => {
       if (res.data.success) {
         setTaskCount(res.data.data.taskCount);
       }
-    } catch (err) {
-      console.error('Failed to fetch dashboard data', err);
+    } catch {
+      console.error('Failed to fetch dashboard data');
     }
   }, []);
 
@@ -34,7 +34,10 @@ const Dashboard = () => {
   }, []);
 
   useEffect(() => {
-    fetchData();
+    const init = async () => {
+      await fetchData();
+    };
+    init();
   }, [fetchData]);
 
   useSSE(useCallback((event) => {
@@ -79,7 +82,7 @@ const Dashboard = () => {
       setPendingApprovals(prev => prev.filter(a => a.task_id !== taskId));
       addToast('Task approved and resumed');
       fetchData();
-    } catch (err) {
+    } catch {
       addToast('Failed to approve task', 'error');
     }
   };
@@ -90,7 +93,7 @@ const Dashboard = () => {
       setPendingApprovals(prev => prev.filter(a => a.task_id !== taskId));
       addToast('Task execution denied');
       fetchData();
-    } catch (err) {
+    } catch {
       addToast('Failed to deny task', 'error');
     }
   };
@@ -109,7 +112,7 @@ const Dashboard = () => {
       await axios.post('/api/rotate-api-key');
       await checkAuth();
       alert('API Key rotated successfully');
-    } catch (err) {
+    } catch {
       alert('Failed to rotate API Key');
     } finally {
       setRotating(false);
@@ -120,10 +123,9 @@ const Dashboard = () => {
     try {
       const res = await axios.post('/api/billing/create-checkout-session');
       if (res.data.success && res.data.data.url) {
-        window.location.href = res.data.data.url;
+        window.location.assign(res.data.data.url);
       }
-    } catch (err) {
-      console.error('Upgrade error', err);
+    } catch {
       alert('Failed to initiate upgrade');
     }
   };

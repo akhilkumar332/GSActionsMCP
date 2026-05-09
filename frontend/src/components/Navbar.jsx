@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Clock, Menu, X, ArrowRight, Activity } from 'lucide-react';
+import { Clock, Menu, X, Activity } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 const Navbar = () => {

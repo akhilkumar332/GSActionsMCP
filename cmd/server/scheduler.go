@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
@@ -59,10 +58,14 @@ func runScheduler(ctx context.Context, s *server.MCPServer) {
 							ID:                 t.ID,
 							UserID:             t.UserID,
 						})
+						evtPayload, _ := json.Marshal(map[string]interface{}{
+							"task_id":   taskID,
+							"task_name": t.Name,
+						})
 						_ = PublishEvent(workerCtx, PubSubEvent{
 							UserID:    t.UserID,
 							EventType: "approval_required",
-							Payload:   fmt.Sprintf(`{"task_id":"%s", "task_name":"%s"}`, taskID, t.Name),
+							Payload:   string(evtPayload),
 						})
 						return
 					}
@@ -78,10 +81,19 @@ func runScheduler(ctx context.Context, s *server.MCPServer) {
 						})
 
 						// Emit Redis event
+						evtPayload, _ := json.Marshal(map[string]interface{}{
+							"id":             formatUUID(logID),
+							"task_id":        taskID,
+							"status":         "missed",
+							"execution_time": time.Now().Format(time.RFC3339),
+							"task_name":      t.Name,
+							"user_email":     emailStr,
+							"error_message":  "user offline",
+						})
 						_ = PublishEvent(workerCtx, PubSubEvent{
 							UserID:    t.UserID,
 							EventType: "task_executed",
-							Payload:   fmt.Sprintf(`{"id":"%s", "task_id":"%s", "status":"missed", "execution_time":"%s", "task_name":"%s", "user_email":"%s", "error_message":"user offline"}`, formatUUID(logID), taskID, time.Now().Format(time.RFC3339), t.Name, emailStr),
+							Payload:   string(evtPayload),
 						})
 						
 						// Phase 3.1: Missed Task Policy
@@ -144,10 +156,19 @@ func runScheduler(ctx context.Context, s *server.MCPServer) {
 						})
 
 						// Emit Redis event
+						evtPayload, _ := json.Marshal(map[string]interface{}{
+							"id":             formatUUID(logID),
+							"task_id":        taskID,
+							"status":         "failure",
+							"execution_time": time.Now().Format(time.RFC3339),
+							"task_name":      t.Name,
+							"user_email":     emailStr,
+							"error_message":  err.Error(),
+						})
 						_ = PublishEvent(workerCtx, PubSubEvent{
 							UserID:    t.UserID,
 							EventType: "task_executed",
-							Payload:   fmt.Sprintf(`{"id":"%s", "task_id":"%s", "status":"failure", "execution_time":"%s", "task_name":"%s", "user_email":"%s", "error_message":"%s"}`, formatUUID(logID), taskID, time.Now().Format(time.RFC3339), t.Name, emailStr, strings.ReplaceAll(err.Error(), `"`, `'`)),
+							Payload:   string(evtPayload),
 						})
 						
 						if failureCount >= 3 {
@@ -179,10 +200,19 @@ func runScheduler(ctx context.Context, s *server.MCPServer) {
 					})
 
 					// Emit Redis event
+					evtPayload, _ := json.Marshal(map[string]interface{}{
+						"id":             formatUUID(logID),
+						"task_id":        taskID,
+						"status":         "success",
+						"execution_time": time.Now().Format(time.RFC3339),
+						"task_name":      t.Name,
+						"user_email":     emailStr,
+						"llm_response":   "Task delivered to node via Redis",
+					})
 					_ = PublishEvent(workerCtx, PubSubEvent{
 						UserID:    t.UserID,
 						EventType: "task_executed",
-						Payload:   fmt.Sprintf(`{"id":"%s", "task_id":"%s", "status":"success", "execution_time":"%s", "task_name":"%s", "user_email":"%s", "llm_response":"Task delivered to node via Redis"}`, formatUUID(logID), taskID, time.Now().Format(time.RFC3339), t.Name, emailStr),
+						Payload:   string(evtPayload),
 					})
 
 					// Iteration 2: We no longer update the task status or call completeTask here.
