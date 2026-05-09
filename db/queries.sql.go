@@ -425,12 +425,13 @@ func (q *Queries) ListUserTasks(ctx context.Context, userID string) ([]ListUserT
 }
 
 const listUsers = `-- name: ListUsers :many
-SELECT id, email, role, tier, created_at FROM users ORDER BY created_at DESC
+SELECT id, email, api_key, role, tier, created_at FROM users ORDER BY created_at DESC
 `
 
 type ListUsersRow struct {
 	ID        string
 	Email     pgtype.Text
+	ApiKey    string
 	Role      pgtype.Text
 	Tier      pgtype.Text
 	CreatedAt pgtype.Timestamptz
@@ -448,6 +449,7 @@ func (q *Queries) ListUsers(ctx context.Context) ([]ListUsersRow, error) {
 		if err := rows.Scan(
 			&i.ID,
 			&i.Email,
+			&i.ApiKey,
 			&i.Role,
 			&i.Tier,
 			&i.CreatedAt,
@@ -541,6 +543,21 @@ type UpdateTaskStatusAndFailureCountParams struct {
 
 func (q *Queries) UpdateTaskStatusAndFailureCount(ctx context.Context, arg UpdateTaskStatusAndFailureCountParams) error {
 	_, err := q.db.Exec(ctx, updateTaskStatusAndFailureCount, arg.Status, arg.FailureCount, arg.ID)
+	return err
+}
+
+const updateTaskStatusByUserID = `-- name: UpdateTaskStatusByUserID :exec
+UPDATE tasks SET status = $1, locked_by = NULL WHERE id = $2 AND user_id = $3
+`
+
+type UpdateTaskStatusByUserIDParams struct {
+	Status pgtype.Text
+	ID     pgtype.UUID
+	UserID string
+}
+
+func (q *Queries) UpdateTaskStatusByUserID(ctx context.Context, arg UpdateTaskStatusByUserIDParams) error {
+	_, err := q.db.Exec(ctx, updateTaskStatusByUserID, arg.Status, arg.ID, arg.UserID)
 	return err
 }
 

@@ -35,6 +35,6 @@ func sendFailureEmail(ctx context.Context, userID string, taskID string, taskNam
 	if err != nil {
 		log.Printf("SendGrid error: %v", err)
 	} else {
-		log.Printf("Failure email sent to %s. Status Code: %d", email, response.StatusCode)
+		log.Printf("Failure email sent to %s. Status Code: %d", email.String, response.StatusCode)
 	}
 }
