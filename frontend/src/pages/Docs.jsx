@@ -60,7 +60,8 @@ X-API-Key: YOUR_SECURE_KEY`}
           When a task is due, the server issues a <code>sampling/createMessage</code> request via the SSE bridge. 
           The client intercepts this, performs the LLM action, and posts the result back to the server.
         </p>
-      </div>
+      </section>
+    </div>
   </DocumentationLayout>
 );
 
