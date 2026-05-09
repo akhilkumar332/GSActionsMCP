@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import DashboardLayout from '../components/DashboardLayout';
 import axios from 'axios';
-import { Key, Trash2, Plus, ShieldCheck, ShieldAlert, Zap, Bell, Loader2, X } from 'lucide-react';
+import { Key, Trash2, Plus, ShieldCheck, Zap, Bell, Loader2, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const Vault = () => {
@@ -11,6 +11,14 @@ const Vault = () => {
   const [showAddForm, setShowAddForm] = useState(false);
   const [newSecret, setNewSecret] = useState({ name: '', value: '' });
   const [submitting, setSubmitting] = useState(false);
+
+  const addToast = useCallback((message, type = 'success') => {
+    const id = Date.now();
+    setToasts((prev) => [...prev, { id, message, type }]);
+    setTimeout(() => {
+      setToasts((prev) => prev.filter((t) => t.id !== id));
+    }, 5000);
+  }, []);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -24,18 +32,13 @@ const Vault = () => {
     } finally {
       setLoading(false);
     }
-  }, []);
-
-  const addToast = useCallback((message, type = 'success') => {
-    const id = Date.now();
-    setToasts((prev) => [...prev, { id, message, type }]);
-    setTimeout(() => {
-      setToasts((prev) => prev.filter((t) => t.id !== id));
-    }, 5000);
-  }, []);
+  }, [addToast]);
 
   useEffect(() => {
-    fetchData();
+    const init = async () => {
+      await fetchData();
+    };
+    init();
   }, [fetchData]);
 
   const handleDelete = async (name) => {
