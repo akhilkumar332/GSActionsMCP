@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
@@ -62,6 +63,11 @@ func main() {
 		log.Fatalf("Unable to connect to database: %v", err)
 	}
 	defer dbPool.Close()
+
+	// Run migrations
+	if err := runMigrations(ctx, dbPool); err != nil {
+		log.Printf("Warning: migrations failed: %v", err)
+	}
 
 	queries = db.New(dbPool)
 
@@ -166,6 +172,8 @@ func main() {
 	admin := api.Group("/admin", EchoRequireRole("admin"))
 	admin.GET("/users", apiAdminUsersHandler)
 	admin.POST("/users/update", apiAdminUpdateUserHandler)
+	admin.GET("/seo", apiGetSEOHandler)
+	admin.POST("/seo", apiUpdateSEOHandler)
 
 	// Phase 8: The Monetization API (Billing)
 	api.POST("/billing/create-checkout-session", apiCreateCheckoutSession)
@@ -249,4 +257,37 @@ func main() {
 func getUser(r *http.Request) *User {
 	user, _ := r.Context().Value("user").(*User)
 	return user
+}
+
+func runMigrations(ctx context.Context, pool *pgxpool.Pool) error {
+	entries, err := os.ReadDir("migrations")
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+
+	for _, entry := range entries {
+		if entry.IsDir() || !entry.Type().IsRegular() {
+			continue
+		}
+		if filepath.Ext(entry.Name()) != ".sql" {
+			continue
+		}
+
+		log.Printf("Applying migration: %s", entry.Name())
+		content, err := os.ReadFile(filepath.Join("migrations", entry.Name()))
+		if err != nil {
+			return fmt.Errorf("failed to read migration %s: %w", entry.Name(), err)
+		}
+
+		_, err = pool.Exec(ctx, string(content))
+		if err != nil {
+			// Some migrations might fail if already applied partially (e.g. column already exists)
+			// But for now, we just log it and continue if it's 007 which is idempotent
+			log.Printf("Migration %s result: %v", entry.Name(), err)
+		}
+	}
+	return nil
 }

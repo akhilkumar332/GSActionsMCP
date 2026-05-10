@@ -131,21 +131,29 @@ func (sm *SessionManager) MaintainHeartbeat(ctx context.Context, userID string, 
 						triggerConfigStr := taskData["trigger_config"]
 
 						var tid pgtype.UUID
-						_ = parseUUID(taskID, &tid)
+						if err := parseUUID(taskID, &tid); err != nil {
+							log.Printf("Invalid task ID received via Pub/Sub for user %s: %s", userID, taskID)
+							return
+						}
 
 						// 1. Fetch task details early (needed for resolvePrompt and metadata)
 						dbCtx, dbCancel := context.WithTimeout(context.Background(), 15*time.Second)
 						defer dbCancel()
 
-						t, err := queries.GetTaskByID(dbCtx, tid)
+						t, err := queries.GetTaskByID(dbCtx, db.GetTaskByIDParams{
+							ID:     tid,
+							UserID: userID,
+						})
 						if err != nil {
 							log.Printf("Failed to fetch task %s: %v", taskID, err)
 							return
 						}
 
-						userEmail, _ := queries.GetUserEmail(dbCtx, userID)
+						userEmail, err := queries.GetUserEmail(dbCtx, userID)
 						emailStr := ""
-						if userEmail.Valid {
+						if err != nil {
+							log.Printf("Error fetching user email for %s: %v", userID, err)
+						} else if userEmail.Valid {
 							emailStr = userEmail.String
 						}
 
@@ -181,12 +189,15 @@ func (sm *SessionManager) MaintainHeartbeat(ctx context.Context, userID string, 
 							log.Printf("Pub/Sub Sampling failed for user %s: %v", userID, err)
 							
 							// Phase 10.2: Properly log failure back to DB instead of failing silently
-							logID, _ := queries.CreateTaskLog(dbCtx, db.CreateTaskLogParams{
+							logID, logErr := queries.CreateTaskLog(dbCtx, db.CreateTaskLogParams{
 								TaskID:       tid,
 								UserID:       userID,
 								Status:       "failure",
 								ErrorMessage: pgtype.Text{String: err.Error(), Valid: true},
 							})
+							if logErr != nil {
+								log.Printf("Error creating failure log for task %s: %v", taskID, logErr)
+							}
 							
 							// Emit Redis event
 							evtPayload, _ := json.Marshal(map[string]interface{}{
@@ -200,27 +211,41 @@ func (sm *SessionManager) MaintainHeartbeat(ctx context.Context, userID string, 
 								"secrets_injected": secretCount,
 								"chained":          chained,
 							})
-							_ = PublishEvent(dbCtx, PubSubEvent{
+							if err := PublishEvent(dbCtx, PubSubEvent{
 								UserID:    userID,
 								EventType: "task_executed",
 								Payload:   string(evtPayload),
-							})
+							}); err != nil {
+								log.Printf("Error publishing task_executed (failure) for %s: %v", taskID, err)
+							}
 							
 							// Increment failure count securely
-							currentFailures, _ := queries.IncrementTaskFailureCount(dbCtx, tid)
+							currentFailures, err := queries.IncrementTaskFailureCount(dbCtx, db.IncrementTaskFailureCountParams{
+								ID:     tid,
+								UserID: userID,
+							})
+							if err != nil {
+								log.Printf("Error incrementing failure count for task %s: %v", taskID, err)
+							}
 							
 							if currentFailures.Int32 >= 3 {
-								_ = queries.UpdateTaskStatus(dbCtx, db.UpdateTaskStatusParams{
+								if err := queries.UpdateTaskStatus(dbCtx, db.UpdateTaskStatusParams{
 									Status: pgtype.Text{String: StatusError, Valid: true},
 									ID:     tid,
-								})
+									UserID: userID,
+								}); err != nil {
+									log.Printf("Error updating status to error for task %s: %v", taskID, err)
+								}
 								sendFailureEmail(dbCtx, userID, taskID, t.Name) 
 							} else {
 								// Unlock so it can be retried by the scheduler
-								_ = queries.UpdateTaskStatus(dbCtx, db.UpdateTaskStatusParams{
+								if err := queries.UpdateTaskStatus(dbCtx, db.UpdateTaskStatusParams{
 									Status: pgtype.Text{String: StatusActive, Valid: true},
 									ID:     tid,
-								})
+									UserID: userID,
+								}); err != nil {
+									log.Printf("Error updating status to active for task %s: %v", taskID, err)
+								}
 							}
 							return
 						}
@@ -236,12 +261,15 @@ func (sm *SessionManager) MaintainHeartbeat(ctx context.Context, userID string, 
 						log.Printf("Received LLM Response for user %s: %s", userID, llmResponse)
 						
 						// Save the actual LLM response to the specific task log
-						logID, _ := queries.CreateTaskLog(dbCtx, db.CreateTaskLogParams{
+						logID, err := queries.CreateTaskLog(dbCtx, db.CreateTaskLogParams{
 							TaskID:      tid,
 							UserID:      userID,
 							Status:      "success",
 							LlmResponse: pgtype.Text{String: llmResponse, Valid: true},
 						})
+						if err != nil {
+							log.Printf("Error creating success log for task %s: %v", taskID, err)
+						}
 
 						// Emit Redis event
 						evtPayload, _ := json.Marshal(map[string]interface{}{
@@ -255,11 +283,13 @@ func (sm *SessionManager) MaintainHeartbeat(ctx context.Context, userID string, 
 							"secrets_injected": secretCount,
 							"chained":          chained,
 						})
-						_ = PublishEvent(dbCtx, PubSubEvent{
+						if err := PublishEvent(dbCtx, PubSubEvent{
 							UserID:    userID,
 							EventType: "task_executed",
 							Payload:   string(evtPayload),
-						})
+						}); err != nil {
+							log.Printf("Error publishing task_executed (success) for %s: %v", taskID, err)
+						}
 
 						// Iteration 2: Advance the task status
 						if triggerType == TriggerDate {
@@ -270,20 +300,26 @@ func (sm *SessionManager) MaintainHeartbeat(ctx context.Context, userID string, 
 						var config map[string]interface{}
 						if err := json.Unmarshal([]byte(triggerConfigStr), &config); err != nil {
 							log.Printf("Error unmarshaling trigger config for task %s: %v", taskID, err)
-							_ = queries.UpdateTaskStatus(dbCtx, db.UpdateTaskStatusParams{
+							if err := queries.UpdateTaskStatus(dbCtx, db.UpdateTaskStatusParams{
 								Status: pgtype.Text{String: StatusPaused, Valid: true},
 								ID:     tid,
-							})
+								UserID: userID,
+							}); err != nil {
+								log.Printf("Error pausing task %s: %v", taskID, err)
+							}
 							return
 						}
 
 						newNextRun, calcErr := calculateNextRun(triggerType, config, time.Now().UTC())
 						if calcErr != nil {
 							log.Printf("Error calculating next run for task %s: %v", taskID, calcErr)
-							_ = queries.UpdateTaskStatus(dbCtx, db.UpdateTaskStatusParams{
+							if err := queries.UpdateTaskStatus(dbCtx, db.UpdateTaskStatusParams{
 								Status: pgtype.Text{String: StatusPaused, Valid: true},
 								ID:     tid,
-							})
+								UserID: userID,
+							}); err != nil {
+								log.Printf("Error pausing task %s: %v", taskID, err)
+							}
 							return
 						}
 

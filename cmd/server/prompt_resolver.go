@@ -59,7 +59,10 @@ func resolvePrompt(ctx context.Context, userID string, rawPrompt string, parentT
 	chained := false
 	// 2. Resolve Chaining Context
 	if parentTaskID.Valid {
-		parentOutput, err := queries.GetLatestTaskLogResponse(ctx, parentTaskID)
+		parentOutput, err := queries.GetLatestTaskLogResponse(ctx, db.GetLatestTaskLogResponseParams{
+			TaskID: parentTaskID,
+			UserID: userID,
+		})
 		if err == nil && parentOutput.Valid && parentOutput.String != "" {
 			// Prepend context
 			resolved = fmt.Sprintf("Context from previous task:\n%s\n\nYour Prompt:\n%s", parentOutput.String, resolved)

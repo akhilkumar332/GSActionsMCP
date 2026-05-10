@@ -355,3 +355,41 @@ func getUserFromEcho(c echo.Context) *User {
 	user, _ := c.Get("user").(*User)
 	return user
 }
+
+type SEOUpdateInput struct {
+	Title       string `json:"title"`
+	Description string `json:"description"`
+	Keywords    string `json:"keywords"`
+	OGImage     string `json:"og_image"`
+}
+
+func apiGetSEOHandler(c echo.Context) error {
+	settings, err := queries.GetSEOSettings(c.Request().Context())
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, APIResponse{Success: false, Error: "Failed to fetch SEO settings"})
+	}
+
+	return c.JSON(http.StatusOK, APIResponse{
+		Success: true,
+		Data:    settings,
+	})
+}
+
+func apiUpdateSEOHandler(c echo.Context) error {
+	var input SEOUpdateInput
+	if err := c.Bind(&input); err != nil {
+		return c.JSON(http.StatusBadRequest, APIResponse{Success: false, Error: "Invalid request body"})
+	}
+
+	err := queries.UpdateSEOSettings(c.Request().Context(), db.UpdateSEOSettingsParams{
+		Title:       input.Title,
+		Description: input.Description,
+		Keywords:    input.Keywords,
+		OgImage:     pgtype.Text{String: input.OGImage, Valid: input.OGImage != ""},
+	})
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, APIResponse{Success: false, Error: "Failed to update SEO settings"})
+	}
+
+	return c.JSON(http.StatusOK, APIResponse{Success: true, Message: "SEO settings updated successfully"})
+}

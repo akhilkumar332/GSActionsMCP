@@ -37,7 +37,11 @@ func registerTools(s *server.MCPServer) {
 		if !ok {
 			return mcp.NewToolResultError("unauthorized"), nil
 		}
-		userTier, _ := ctx.Value("user_tier").(string)
+		val := ctx.Value("user_tier")
+		userTier, ok := val.(string)
+		if !ok {
+			userTier = TierFree
+		}
 
 		// Phase 2.2: Tool Quotas
 		taskCount, err := queries.CountUserTasks(ctx, userID)

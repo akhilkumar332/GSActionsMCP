@@ -341,25 +341,54 @@ func (q *Queries) GetDependentTasksToTrigger(ctx context.Context, dependsOnTaskI
 }
 
 const getLatestTaskLogResponse = `-- name: GetLatestTaskLogResponse :one
-SELECT llm_response FROM task_logs 
-WHERE task_id = $1 
-ORDER BY execution_time DESC 
+SELECT l.llm_response FROM task_logs l
+INNER JOIN tasks t ON l.task_id = t.id
+WHERE l.task_id = $1 AND t.user_id = $2
+ORDER BY l.execution_time DESC 
 LIMIT 1
 `
 
-func (q *Queries) GetLatestTaskLogResponse(ctx context.Context, taskID pgtype.UUID) (pgtype.Text, error) {
-	row := q.db.QueryRow(ctx, getLatestTaskLogResponse, taskID)
+type GetLatestTaskLogResponseParams struct {
+	TaskID pgtype.UUID
+	UserID string
+}
+
+func (q *Queries) GetLatestTaskLogResponse(ctx context.Context, arg GetLatestTaskLogResponseParams) (pgtype.Text, error) {
+	row := q.db.QueryRow(ctx, getLatestTaskLogResponse, arg.TaskID, arg.UserID)
 	var llm_response pgtype.Text
 	err := row.Scan(&llm_response)
 	return llm_response, err
 }
 
-const getTaskByID = `-- name: GetTaskByID :one
-SELECT id, user_id, name, trigger_type, trigger_config, agent_prompt, status, locked_by, next_run, last_run, failure_count, missed_task_policy, depends_on_task_id, created_at, requires_approval, encrypted_secrets, last_approval_status, trigger_on_completion FROM tasks WHERE id = $1
+const getSEOSettings = `-- name: GetSEOSettings :one
+SELECT id, title, description, keywords, og_image, updated_at FROM seo_settings WHERE id = 1
 `
 
-func (q *Queries) GetTaskByID(ctx context.Context, id pgtype.UUID) (Task, error) {
-	row := q.db.QueryRow(ctx, getTaskByID, id)
+func (q *Queries) GetSEOSettings(ctx context.Context) (SeoSetting, error) {
+	row := q.db.QueryRow(ctx, getSEOSettings)
+	var i SeoSetting
+	err := row.Scan(
+		&i.ID,
+		&i.Title,
+		&i.Description,
+		&i.Keywords,
+		&i.OgImage,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getTaskByID = `-- name: GetTaskByID :one
+SELECT id, user_id, name, trigger_type, trigger_config, agent_prompt, status, locked_by, next_run, last_run, failure_count, missed_task_policy, depends_on_task_id, created_at, requires_approval, encrypted_secrets, last_approval_status, trigger_on_completion FROM tasks WHERE id = $1 AND user_id = $2
+`
+
+type GetTaskByIDParams struct {
+	ID     pgtype.UUID
+	UserID string
+}
+
+func (q *Queries) GetTaskByID(ctx context.Context, arg GetTaskByIDParams) (Task, error) {
+	row := q.db.QueryRow(ctx, getTaskByID, arg.ID, arg.UserID)
 	var i Task
 	err := row.Scan(
 		&i.ID,
@@ -515,12 +544,17 @@ func (q *Queries) GetUserSecret(ctx context.Context, arg GetUserSecretParams) ([
 
 const incrementTaskFailureCount = `-- name: IncrementTaskFailureCount :one
 UPDATE tasks SET failure_count = failure_count + 1 
-WHERE id = $1 
+WHERE id = $1 AND user_id = $2
 RETURNING failure_count
 `
 
-func (q *Queries) IncrementTaskFailureCount(ctx context.Context, id pgtype.UUID) (pgtype.Int4, error) {
-	row := q.db.QueryRow(ctx, incrementTaskFailureCount, id)
+type IncrementTaskFailureCountParams struct {
+	ID     pgtype.UUID
+	UserID string
+}
+
+func (q *Queries) IncrementTaskFailureCount(ctx context.Context, arg IncrementTaskFailureCountParams) (pgtype.Int4, error) {
+	row := q.db.QueryRow(ctx, incrementTaskFailureCount, arg.ID, arg.UserID)
 	var failure_count pgtype.Int4
 	err := row.Scan(&failure_count)
 	return failure_count, err
@@ -680,6 +714,29 @@ func (q *Queries) RevertProcessingTasks(ctx context.Context, lockedBy pgtype.Tex
 	return err
 }
 
+const updateSEOSettings = `-- name: UpdateSEOSettings :exec
+UPDATE seo_settings 
+SET title = $1, description = $2, keywords = $3, og_image = $4, updated_at = NOW()
+WHERE id = 1
+`
+
+type UpdateSEOSettingsParams struct {
+	Title       string
+	Description string
+	Keywords    string
+	OgImage     pgtype.Text
+}
+
+func (q *Queries) UpdateSEOSettings(ctx context.Context, arg UpdateSEOSettingsParams) error {
+	_, err := q.db.Exec(ctx, updateSEOSettings,
+		arg.Title,
+		arg.Description,
+		arg.Keywords,
+		arg.OgImage,
+	)
+	return err
+}
+
 const updateTaskApprovalStatus = `-- name: UpdateTaskApprovalStatus :exec
 UPDATE tasks SET last_approval_status = $1, status = $2, locked_by = NULL WHERE id = $3 AND user_id = $4
 `
@@ -717,31 +774,38 @@ func (q *Queries) UpdateTaskNextRun(ctx context.Context, arg UpdateTaskNextRunPa
 }
 
 const updateTaskStatus = `-- name: UpdateTaskStatus :exec
-UPDATE tasks SET status = $1, locked_by = NULL WHERE id = $2
+UPDATE tasks SET status = $1, locked_by = NULL WHERE id = $2 AND user_id = $3
 `
 
 type UpdateTaskStatusParams struct {
 	Status pgtype.Text
 	ID     pgtype.UUID
+	UserID string
 }
 
 func (q *Queries) UpdateTaskStatus(ctx context.Context, arg UpdateTaskStatusParams) error {
-	_, err := q.db.Exec(ctx, updateTaskStatus, arg.Status, arg.ID)
+	_, err := q.db.Exec(ctx, updateTaskStatus, arg.Status, arg.ID, arg.UserID)
 	return err
 }
 
 const updateTaskStatusAndFailureCount = `-- name: UpdateTaskStatusAndFailureCount :exec
-UPDATE tasks SET status = $1, locked_by = NULL, failure_count = $2 WHERE id = $3
+UPDATE tasks SET status = $1, locked_by = NULL, failure_count = $2 WHERE id = $3 AND user_id = $4
 `
 
 type UpdateTaskStatusAndFailureCountParams struct {
 	Status       pgtype.Text
 	FailureCount pgtype.Int4
 	ID           pgtype.UUID
+	UserID       string
 }
 
 func (q *Queries) UpdateTaskStatusAndFailureCount(ctx context.Context, arg UpdateTaskStatusAndFailureCountParams) error {
-	_, err := q.db.Exec(ctx, updateTaskStatusAndFailureCount, arg.Status, arg.FailureCount, arg.ID)
+	_, err := q.db.Exec(ctx, updateTaskStatusAndFailureCount,
+		arg.Status,
+		arg.FailureCount,
+		arg.ID,
+		arg.UserID,
+	)
 	return err
 }
 

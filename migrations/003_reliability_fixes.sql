@@ -1,6 +1,7 @@
 -- migrations/003_reliability_fixes.sql
 
 -- Redefine fn_claim_due_tasks to ensure it only joins with dependencies belonging to the same user
+-- Note: This will be redefined again in later migrations if columns are added.
 CREATE OR REPLACE FUNCTION fn_claim_due_tasks(batch_size INT, worker_id TEXT)
 RETURNS SETOF tasks AS $$
 BEGIN

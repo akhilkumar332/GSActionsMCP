@@ -43,42 +43,52 @@ func runScheduler(ctx context.Context, s *server.MCPServer) {
 					isOnline := GlobalSessionManager.IsOnline(workerCtx, t.UserID)
 
 					taskID := formatUUID(t.ID)
-					userEmail, _ := queries.GetUserEmail(workerCtx, t.UserID)
+					userEmail, err := queries.GetUserEmail(workerCtx, t.UserID)
 					emailStr := ""
-					if userEmail.Valid {
+					if err != nil {
+						log.Printf("Error fetching user email for %s: %v", t.UserID, err)
+					} else if userEmail.Valid {
 						emailStr = userEmail.String
 					}
 
 					// Human-in-the-Loop: Check if approval is required
 					if t.RequiresApproval.Bool && t.LastApprovalStatus.String != "approved" {
 						log.Printf("Task %s requires approval. Pausing.", taskID)
-						_ = queries.UpdateTaskApprovalStatus(workerCtx, db.UpdateTaskApprovalStatusParams{
+						if err := queries.UpdateTaskApprovalStatus(workerCtx, db.UpdateTaskApprovalStatusParams{
 							LastApprovalStatus: pgtype.Text{String: "pending", Valid: true},
 							Status:             pgtype.Text{String: StatusPaused, Valid: true},
 							ID:                 t.ID,
 							UserID:             t.UserID,
-						})
+						}); err != nil {
+							log.Printf("Error updating task approval status for %s: %v", taskID, err)
+						}
+
 						evtPayload, _ := json.Marshal(map[string]interface{}{
 							"task_id":   taskID,
 							"task_name": t.Name,
 						})
-						_ = PublishEvent(workerCtx, PubSubEvent{
+						if err := PublishEvent(workerCtx, PubSubEvent{
 							UserID:    t.UserID,
 							EventType: "approval_required",
 							Payload:   string(evtPayload),
-						})
+						}); err != nil {
+							log.Printf("Error publishing approval_required event for %s: %v", taskID, err)
+						}
 						return
 					}
 
 					if !isOnline {
 						log.Printf("User %s is offline. Task %s missed.", t.UserID, taskID)
 						// Phase 1.2: Execution Logging
-						logID, _ := queries.CreateTaskLog(workerCtx, db.CreateTaskLogParams{
+						logID, err := queries.CreateTaskLog(workerCtx, db.CreateTaskLogParams{
 							TaskID:       t.ID,
 							UserID:       t.UserID,
 							Status:       "missed",
 							ErrorMessage: pgtype.Text{String: "user offline", Valid: true},
 						})
+						if err != nil {
+							log.Printf("Error creating task log for %s (missed): %v", taskID, err)
+						}
 
 						// Emit Redis event
 						evtPayload, _ := json.Marshal(map[string]interface{}{
@@ -90,20 +100,24 @@ func runScheduler(ctx context.Context, s *server.MCPServer) {
 							"user_email":     emailStr,
 							"error_message":  "user offline",
 						})
-						_ = PublishEvent(workerCtx, PubSubEvent{
+						if err := PublishEvent(workerCtx, PubSubEvent{
 							UserID:    t.UserID,
 							EventType: "task_executed",
 							Payload:   string(evtPayload),
-						})
+						}); err != nil {
+							log.Printf("Error publishing task_executed event for %s (missed): %v", taskID, err)
+						}
 						
 						// Phase 3.1: Missed Task Policy
 						if t.MissedTaskPolicy.String == PolicyRunImmediate {
 							// Push next_run ahead by 1 minute to prevent rapid polling spam while offline
-							_ = queries.UpdateTaskNextRun(workerCtx, db.UpdateTaskNextRunParams{
+							if err := queries.UpdateTaskNextRun(workerCtx, db.UpdateTaskNextRunParams{
 								Status:  pgtype.Text{String: StatusActive, Valid: true},
 								NextRun: pgtype.Timestamptz{Time: time.Now().UTC().Add(1 * time.Minute), Valid: true},
 								ID:      t.ID,
-							})
+							}); err != nil {
+								log.Printf("Error updating next run for missed task %s: %v", taskID, err)
+							}
 							return
 						} else {
 							// "skip": calculate next run and update
@@ -114,10 +128,12 @@ func runScheduler(ctx context.Context, s *server.MCPServer) {
 									return
 								}
 							}
-							_ = queries.UpdateTaskStatus(workerCtx, db.UpdateTaskStatusParams{
+							if err := queries.UpdateTaskStatus(workerCtx, db.UpdateTaskStatusParams{
 								Status: pgtype.Text{String: StatusPaused, Valid: true},
 								ID:     t.ID,
-							})
+							}); err != nil {
+								log.Printf("Error pausing task %s: %v", taskID, err)
+							}
 							return
 						}
 					}
@@ -139,12 +155,15 @@ func runScheduler(ctx context.Context, s *server.MCPServer) {
 						log.Printf("Failed to deliver task %s for user %s: %v", taskID, t.UserID, err)
 						// Phase 2.3: Dead Letter Queue
 						failureCount := t.FailureCount.Int32 + 1
-						logID, _ := queries.CreateTaskLog(workerCtx, db.CreateTaskLogParams{
+						logID, logErr := queries.CreateTaskLog(workerCtx, db.CreateTaskLogParams{
 							TaskID:       t.ID,
 							UserID:       t.UserID,
 							Status:       "failure",
 							ErrorMessage: pgtype.Text{String: err.Error(), Valid: true},
 						})
+						if logErr != nil {
+							log.Printf("Error creating task log for %s (failure): %v", taskID, logErr)
+						}
 
 						// Emit Redis event
 						evtPayload, _ := json.Marshal(map[string]interface{}{
@@ -156,39 +175,48 @@ func runScheduler(ctx context.Context, s *server.MCPServer) {
 							"user_email":     emailStr,
 							"error_message":  err.Error(),
 						})
-						_ = PublishEvent(workerCtx, PubSubEvent{
+						if err := PublishEvent(workerCtx, PubSubEvent{
 							UserID:    t.UserID,
 							EventType: "task_executed",
 							Payload:   string(evtPayload),
-						})
+						}); err != nil {
+							log.Printf("Error publishing task_executed event for %s (failure): %v", taskID, err)
+						}
 						
 						if failureCount >= 3 {
 							log.Printf("Task %s failed 3 times, setting status to error.", taskID)
-							_ = queries.UpdateTaskStatusAndFailureCount(workerCtx, db.UpdateTaskStatusAndFailureCountParams{
+							if err := queries.UpdateTaskStatusAndFailureCount(workerCtx, db.UpdateTaskStatusAndFailureCountParams{
 								Status:       pgtype.Text{String: StatusError, Valid: true},
 								FailureCount: pgtype.Int4{Int32: failureCount, Valid: true},
 								ID:           t.ID,
-							})
+							}); err != nil {
+								log.Printf("Error updating status to error for task %s: %v", taskID, err)
+							}
 							
 							// Phase 9.1: Real Dead Letter Email Alert
 							sendFailureEmail(workerCtx, t.UserID, taskID, t.Name)
 						} else {
-							_ = queries.UpdateTaskStatusAndFailureCount(workerCtx, db.UpdateTaskStatusAndFailureCountParams{
+							if err := queries.UpdateTaskStatusAndFailureCount(workerCtx, db.UpdateTaskStatusAndFailureCountParams{
 								Status:       pgtype.Text{String: StatusActive, Valid: true},
 								FailureCount: pgtype.Int4{Int32: failureCount, Valid: true},
 								ID:           t.ID,
-							})
+							}); err != nil {
+								log.Printf("Error updating failure count for task %s: %v", taskID, err)
+							}
 						}
 						return
 					}
 
 					// Log Success delivery to node (session.go will log the actual LLM response)
-					logID, _ := queries.CreateTaskLog(workerCtx, db.CreateTaskLogParams{
+					logID, err := queries.CreateTaskLog(workerCtx, db.CreateTaskLogParams{
 						TaskID:      t.ID,
 						UserID:      t.UserID,
 						Status:      "success",
 						LlmResponse: pgtype.Text{String: "Task delivered to node via Redis", Valid: true},
 					})
+					if err != nil {
+						log.Printf("Error creating task log for %s (delivered): %v", taskID, err)
+					}
 
 					// Emit Redis event
 					evtPayload, _ := json.Marshal(map[string]interface{}{
@@ -200,11 +228,13 @@ func runScheduler(ctx context.Context, s *server.MCPServer) {
 						"user_email":     emailStr,
 						"llm_response":   "Task delivered to node via Redis",
 					})
-					_ = PublishEvent(workerCtx, PubSubEvent{
+					if err := PublishEvent(workerCtx, PubSubEvent{
 						UserID:    t.UserID,
 						EventType: "task_executed",
 						Payload:   string(evtPayload),
-					})
+					}); err != nil {
+						log.Printf("Error publishing task_executed event for %s (delivered): %v", taskID, err)
+					}
 
 					// Iteration 2: We no longer update the task status or call completeTask here.
 					// The execution node (session.go) is now responsible for advancing the task.
@@ -256,7 +286,9 @@ func completeTask(ctx context.Context, taskID string, nextRun time.Time, status 
 			"trigger_type":   t.TriggerType.String,
 			"trigger_config": string(t.TriggerConfig),
 		})
-		_, _ = RedisClient.Publish(ctx, fmt.Sprintf("trigger_task:%s", t.UserID), string(payloadBytes)).Result()
+		if _, err := RedisClient.Publish(ctx, fmt.Sprintf("trigger_task:%s", t.UserID), string(payloadBytes)).Result(); err != nil {
+			log.Printf("Error triggering dependent task %s for user %s: %v", formatUUID(t.ID), t.UserID, err)
+		}
 	}
 }
 

@@ -8,6 +8,15 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type SeoSetting struct {
+	ID          int32
+	Title       string
+	Description string
+	Keywords    string
+	OgImage     pgtype.Text
+	UpdatedAt   pgtype.Timestamptz
+}
+
 type Task struct {
 	ID                  pgtype.UUID
 	UserID              string

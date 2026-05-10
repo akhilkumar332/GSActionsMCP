@@ -61,21 +61,22 @@ RETURNING id;
 UPDATE tasks SET status = $1, locked_by = NULL, next_run = $2 WHERE id = $3;
 
 -- name: GetLatestTaskLogResponse :one
-SELECT llm_response FROM task_logs 
-WHERE task_id = $1 
-ORDER BY execution_time DESC 
+SELECT l.llm_response FROM task_logs l
+INNER JOIN tasks t ON l.task_id = t.id
+WHERE l.task_id = $1 AND t.user_id = $2
+ORDER BY l.execution_time DESC 
 LIMIT 1;
 
 -- name: IncrementTaskFailureCount :one
 UPDATE tasks SET failure_count = failure_count + 1 
-WHERE id = $1 
+WHERE id = $1 AND user_id = $2
 RETURNING failure_count;
 
 -- name: UpdateTaskStatus :exec
-UPDATE tasks SET status = $1, locked_by = NULL WHERE id = $2;
+UPDATE tasks SET status = $1, locked_by = NULL WHERE id = $2 AND user_id = $3;
 
 -- name: UpdateTaskStatusAndFailureCount :exec
-UPDATE tasks SET status = $1, locked_by = NULL, failure_count = $2 WHERE id = $3;
+UPDATE tasks SET status = $1, locked_by = NULL, failure_count = $2 WHERE id = $3 AND user_id = $4;
 
 -- name: ClaimDueTasks :many
 SELECT * FROM fn_claim_due_tasks($1, $2);
@@ -100,7 +101,7 @@ RETURNING *;
 SELECT id, name, trigger_type, status, next_run, requires_approval, encrypted_secrets, last_approval_status, trigger_on_completion FROM tasks WHERE user_id = $1;
 
 -- name: GetTaskByID :one
-SELECT * FROM tasks WHERE id = $1;
+SELECT * FROM tasks WHERE id = $1 AND user_id = $2;
 
 -- name: GetDependentTasksToTrigger :many
 SELECT t.* FROM tasks t
@@ -136,3 +137,11 @@ SELECT id, name, created_at FROM user_secrets WHERE user_id = $1 ORDER BY name A
 
 -- name: DeleteUserSecret :exec
 DELETE FROM user_secrets WHERE user_id = $1 AND name = $2;
+
+-- name: GetSEOSettings :one
+SELECT * FROM seo_settings WHERE id = 1;
+
+-- name: UpdateSEOSettings :exec
+UPDATE seo_settings 
+SET title = $1, description = $2, keywords = $3, og_image = $4, updated_at = NOW()
+WHERE id = 1;
