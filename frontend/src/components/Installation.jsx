@@ -29,7 +29,7 @@ const Installation = () => {
     }
   ];
 
-  const installCommand = 'npx @google-schedule-actions/mcp install';
+  const installCommand = 'npx @gsactions/mcp install';
   const configSnippet = `{
   "mcpServers": {
     "schedule-mcp": {

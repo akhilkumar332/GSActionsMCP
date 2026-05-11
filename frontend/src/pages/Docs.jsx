@@ -61,7 +61,7 @@ const QuickStart = () => (
         <p className="mb-4">Install the global CLI client using <code>npx</code> and copy your API key from the Dashboard:</p>
         <div className="space-y-4">
           <pre className="p-6 rounded-2xl bg-ink-900 text-emerald-400 font-mono text-sm shadow-xl">
-            $ npx @google-schedule-actions/mcp install --api-key YOUR_KEY
+            $ npx @gsactions/mcp install --api-key YOUR_KEY
           </pre>
           <p className="text-sm text-slate-500 italic">Alternatively, manually configure your <code>mcp_config.json</code>:</p>
           <pre className="p-6 rounded-2xl bg-ink-900 text-emerald-400 font-mono text-sm shadow-xl">
@@ -104,7 +104,7 @@ const InstallationDocs = () => (
         <p className="mb-6">The fastest way to install the Schedule MCP client on any machine with Node.js installed.</p>
         <div className="space-y-4">
           <div className="p-4 bg-slate-100 rounded-xl font-mono text-sm">
-            $ npx @google-schedule-actions/mcp install
+            $ npx @gsactions/mcp install
           </div>
           <p className="text-sm text-slate-500">For non-NPM environments, use the standard shell installer:</p>
           <div className="p-4 bg-slate-100 rounded-xl font-mono text-sm">

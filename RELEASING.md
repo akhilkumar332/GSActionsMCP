@@ -60,7 +60,7 @@ After publishing, verify the installation:
 
 ```bash
 # Test NPM installation
-npm install -g @google-schedule-actions/mcp
+npm install -g @gsactions/mcp
 
 # Verify the binary runs
 schedule-mcp --help

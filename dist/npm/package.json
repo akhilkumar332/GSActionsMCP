@@ -1,5 +1,5 @@
 {
-  "name": "@google-schedule-actions/mcp",
+  "name": "@gsactions/mcp",
   "version": "1.0.0",
   "description": "NPM wrapper for Scheduled Actions MCP Go binary",
   "main": "index.js",
