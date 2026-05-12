@@ -242,3 +242,17 @@ SELECT EXISTS (
     LEFT JOIN workspace_members wm ON w.id = wm.workspace_id
     WHERE w.id = $1 AND (w.owner_id = $2 OR wm.user_id = $2)
 ) AS has_access;
+
+-- name: CreateExecutionTrace :one
+INSERT INTO execution_traces (task_id, execution_id, worker_id, step_name, input_data, output_data, is_error, error_message)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+RETURNING *;
+
+-- name: ListTaskTraces :many
+SELECT * FROM execution_traces WHERE task_id = $1 ORDER BY start_time DESC;
+
+-- name: GetTemplateWithSubscription :one
+SELECT t.*, s.subscribed_at IS NOT NULL as is_subscribed
+FROM templates t
+LEFT JOIN user_template_subscriptions s ON t.id = s.template_id AND s.user_id = $1
+WHERE t.id = $2;

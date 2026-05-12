@@ -25,6 +25,21 @@ type DlqTask struct {
 	FailedAt     pgtype.Timestamptz
 }
 
+type ExecutionTrace struct {
+	ID           pgtype.UUID
+	TaskID       pgtype.UUID
+	ExecutionID  string
+	WorkerID     string
+	StepName     string
+	StartTime    pgtype.Timestamptz
+	EndTime      pgtype.Timestamptz
+	DurationMs   pgtype.Int4
+	InputData    []byte
+	OutputData   []byte
+	IsError      pgtype.Bool
+	ErrorMessage pgtype.Text
+}
+
 type OutboundWebhook struct {
 	ID                     pgtype.UUID
 	UserID                 string
@@ -63,6 +78,8 @@ type Task struct {
 	EncryptedSecrets    []byte
 	LastApprovalStatus  pgtype.Text
 	TriggerOnCompletion pgtype.Bool
+	TaskType            pgtype.Text
+	NativeCode          pgtype.Text
 	WorkspaceID         pgtype.UUID
 	MaxRetries          pgtype.Int4
 	RetryCount          pgtype.Int4
@@ -88,6 +105,9 @@ type Template struct {
 	IsPublic    pgtype.Bool
 	WorkspaceID pgtype.UUID
 	CreatedAt   pgtype.Timestamptz
+	PriceID     pgtype.Text
+	IsPremium   pgtype.Bool
+	AuthorID    pgtype.Text
 }
 
 type User struct {
@@ -107,6 +127,12 @@ type UserSecret struct {
 	Name           string
 	EncryptedValue []byte
 	CreatedAt      pgtype.Timestamptz
+}
+
+type UserTemplateSubscription struct {
+	UserID       string
+	TemplateID   pgtype.UUID
+	SubscribedAt pgtype.Timestamptz
 }
 
 type WebSession struct {
