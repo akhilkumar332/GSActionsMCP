@@ -7,6 +7,8 @@ import Dashboard from './pages/Dashboard';
 import Tasks from './pages/Tasks';
 import Vault from './pages/Vault';
 import Webhooks from './pages/Webhooks';
+import Workspaces from './pages/Workspaces';
+import Templates from './pages/Templates';
 import Monitor from './pages/Monitor';
 import AdminUsers from './pages/AdminUsers';
 import AdminSEO from './pages/AdminSEO';
@@ -94,6 +96,24 @@ function App() {
             element={
               <ProtectedRoute roles={['user', 'staff', 'admin']}>
                 <Webhooks />
+              </ProtectedRoute>
+            } 
+          />
+
+          <Route 
+            path="/workspaces" 
+            element={
+              <ProtectedRoute roles={['user', 'staff', 'admin']}>
+                <Workspaces />
+              </ProtectedRoute>
+            } 
+          />
+
+          <Route 
+            path="/templates" 
+            element={
+              <ProtectedRoute roles={['user', 'staff', 'admin']}>
+                <Templates />
               </ProtectedRoute>
             } 
           />
