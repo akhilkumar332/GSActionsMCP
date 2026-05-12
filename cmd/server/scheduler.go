@@ -237,6 +237,127 @@ func handleClaimedTask(workerCtx context.Context, t db.Task) {
 		return
 	}
 
+	if t.TaskType.String == "native_action" {
+		result, err := executeNativeJS(workerCtx, t.NativeCode.String, map[string]interface{}{"task_id": taskID})
+		if err != nil {
+			log.Printf("Native execution failed for task %s: %v", taskID, err)
+			observeTaskOutcome("execution_failure")
+			failureCount := t.FailureCount.Int32 + 1
+			logID, logErr := queries.CreateTaskLog(workerCtx, db.CreateTaskLogParams{
+				TaskID:       t.ID,
+				UserID:       t.UserID,
+				Status:       "failure",
+				ErrorMessage: pgtype.Text{String: err.Error(), Valid: true},
+			})
+			if logErr != nil {
+				log.Printf("Error creating task log for %s (failure): %v", taskID, logErr)
+			}
+
+			evtPayload, _ := json.Marshal(map[string]interface{}{
+				"id":             formatUUID(logID),
+				"task_id":        taskID,
+				"status":         "failure",
+				"execution_time": time.Now().Format(time.RFC3339),
+				"task_name":      t.Name,
+				"user_email":     emailStr,
+				"error_message":  err.Error(),
+			})
+			if err := PublishEvent(workerCtx, PubSubEvent{
+				UserID:    t.UserID,
+				EventType: "task_executed",
+				Payload:   string(evtPayload),
+			}); err != nil {
+				log.Printf("Error publishing task_executed event for %s (failure): %v", taskID, err)
+			}
+
+			retryCount := t.RetryCount.Int32 + 1
+			maxRetries := t.MaxRetries.Int32
+			if maxRetries == 0 {
+				maxRetries = 3
+			}
+
+			if retryCount > maxRetries {
+				log.Printf("Task %s exhausted retries (%d), moving to DLQ.", taskID, maxRetries)
+				if err := queries.UpdateTaskStatusAndFailureCount(workerCtx, db.UpdateTaskStatusAndFailureCountParams{
+					Status:       pgtype.Text{String: StatusError, Valid: true},
+					FailureCount: pgtype.Int4{Int32: failureCount, Valid: true},
+					RetryCount:   pgtype.Int4{Int32: retryCount, Valid: true},
+					ID:           t.ID,
+					UserID:       t.UserID,
+				}); err != nil {
+					log.Printf("Error updating status to error for task %s: %v", taskID, err)
+				}
+				queries.MoveToDLQ(workerCtx, db.MoveToDLQParams{
+					TaskID:       t.ID,
+					ErrorMessage: pgtype.Text{String: err.Error(), Valid: true},
+				})
+				sendFailureEmail(workerCtx, t.UserID, taskID, t.Name)
+			} else {
+				backoffMinutes := int(retryCount) * 2
+				if t.BackoffStrategy.String == "exponential" {
+					backoffMinutes = 1 << retryCount
+				}
+				nextRun := time.Now().UTC().Add(time.Duration(backoffMinutes) * time.Minute)
+				log.Printf("Task %s retry %d/%d scheduled for %v", taskID, retryCount, maxRetries, nextRun)
+				queries.UpdateTaskStatusAndFailureCount(workerCtx, db.UpdateTaskStatusAndFailureCountParams{
+					Status:       pgtype.Text{String: StatusActive, Valid: true},
+					FailureCount: pgtype.Int4{Int32: failureCount, Valid: true},
+					RetryCount:   pgtype.Int4{Int32: retryCount, Valid: true},
+					ID:           t.ID,
+					UserID:       t.UserID,
+				})
+				queries.UpdateTaskNextRun(workerCtx, db.UpdateTaskNextRunParams{
+					Status:  pgtype.Text{String: StatusActive, Valid: true},
+					NextRun: pgtype.Timestamptz{Time: nextRun, Valid: true},
+					ID:      t.ID,
+				})
+			}
+		} else {
+			observeTaskOutcome("success")
+			logID, err := queries.CreateTaskLog(workerCtx, db.CreateTaskLogParams{
+				TaskID:      t.ID,
+				UserID:      t.UserID,
+				Status:      "success",
+				LlmResponse: pgtype.Text{String: result, Valid: true},
+			})
+			if err != nil {
+				log.Printf("Error creating task log for %s (success): %v", taskID, err)
+			}
+
+			evtPayload, _ := json.Marshal(map[string]interface{}{
+				"id":             formatUUID(logID),
+				"task_id":        taskID,
+				"status":         "success",
+				"execution_time": time.Now().Format(time.RFC3339),
+				"task_name":      t.Name,
+				"user_email":     emailStr,
+				"llm_response":   result,
+			})
+			if err := PublishEvent(workerCtx, PubSubEvent{
+				UserID:    t.UserID,
+				EventType: "task_executed",
+				Payload:   string(evtPayload),
+			}); err != nil {
+				log.Printf("Error publishing task_executed event for %s (success): %v", taskID, err)
+			}
+
+			var config map[string]interface{}
+			if err := json.Unmarshal(t.TriggerConfig, &config); err == nil {
+				if newNextRun, calcErr := calculateNextRun(t.TriggerType.String, config, time.Now().UTC()); calcErr == nil {
+					completeTask(workerCtx, taskID, newNextRun)
+					return
+				}
+			}
+			if err := queries.UpdateTaskStatus(workerCtx, db.UpdateTaskStatusParams{
+				Status: pgtype.Text{String: StatusPaused, Valid: true},
+				ID:     t.ID,
+			}); err != nil {
+				log.Printf("Error pausing task %s: %v", taskID, err)
+			}
+		}
+		return
+	}
+
 	executionID := fmt.Sprintf("%s-%d", taskID, time.Now().UTC().UnixNano())
 	payloadBytes, _ := json.Marshal(map[string]interface{}{
 		"task_id":        taskID,
