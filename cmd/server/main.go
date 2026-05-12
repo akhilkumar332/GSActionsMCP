@@ -214,6 +214,8 @@ func main() {
 	api.POST("/tasks/:id/resume", apiResumeTaskHandler)
 	api.DELETE("/tasks/:id", apiDeleteTaskHandler)
 	api.PATCH("/tasks/:id", apiUpdateTaskHandler)
+	api.GET("/tasks/:id/versions", apiListTaskVersionsHandler)
+	api.POST("/tasks/:id/restore/:version_id", apiRestoreTaskVersionHandler)
 	api.POST("/tasks/:id/approve", apiApproveTaskHandler)
 	api.POST("/tasks/:id/deny", apiDenyTaskHandler)
 	api.GET("/secrets", apiListSecretsHandler)
