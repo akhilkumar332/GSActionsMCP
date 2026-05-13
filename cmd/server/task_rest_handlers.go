@@ -14,7 +14,7 @@ func apiListTasksHandler(c echo.Context) error {
 	if userID == "" {
 		return c.JSON(http.StatusUnauthorized, APIResponse{Success: false, Error: "Unauthorized"})
 	}
-	
+
 	tasks, err := queries.ListUserTasks(c.Request().Context(), userID)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, APIResponse{Success: false, Error: "Failed to list tasks"})
@@ -22,7 +22,7 @@ func apiListTasksHandler(c echo.Context) error {
 	if tasks == nil {
 		tasks = []db.ListUserTasksRow{}
 	}
-	
+
 	return c.JSON(http.StatusOK, APIResponse{Success: true, Data: tasks})
 }
 
@@ -32,7 +32,7 @@ func apiPauseTaskHandler(c echo.Context) error {
 		return c.JSON(http.StatusUnauthorized, APIResponse{Success: false, Error: "Unauthorized"})
 	}
 	taskIDStr := c.Param("id")
-	
+
 	var taskID pgtype.UUID
 	err := parseUUID(taskIDStr, &taskID)
 	if err != nil {

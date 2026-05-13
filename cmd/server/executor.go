@@ -32,7 +32,7 @@ func executeNativeJS(ctx context.Context, code string, input map[string]interfac
 	// Run the provided JS code with panic recovery for timeout
 	var val otto.Value
 	var err error
-	
+
 	func() {
 		defer func() {
 			if r := recover(); r != nil {

@@ -25,7 +25,7 @@ type mockRows struct {
 	pgx.Rows
 }
 
-func (m *mockRows) Close() {}
+func (m *mockRows) Close()     {}
 func (m *mockRows) Next() bool { return false }
 func (m *mockRows) Err() error { return nil }
 

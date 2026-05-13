@@ -469,7 +469,7 @@ func handleClaimedTask(workerCtx context.Context, t db.Task) {
 			}); err != nil {
 				log.Printf("Error updating status to error for task %s: %v", taskID, err)
 			}
-			
+
 			// Move to DLQ
 			_, dlqErr := queries.MoveToDLQ(workerCtx, db.MoveToDLQParams{
 				TaskID:       t.ID,

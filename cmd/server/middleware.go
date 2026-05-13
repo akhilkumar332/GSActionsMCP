@@ -59,7 +59,7 @@ func EchoSessionMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
 		c.Set("user", user)
 		c.Set("user_id", user.ID)
 		c.Set("user_role", user.Role)
-		
+
 		// Also add to request context for downstream non-echo handlers if any
 		ctx := context.WithValue(c.Request().Context(), userKey, user)
 		ctx = context.WithValue(ctx, userIDKey, user.ID)
@@ -119,7 +119,7 @@ func EchoAuthMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
 		// Add UserID and Tier to context for use in tools
 		c.Set("user_id", u.ID)
 		c.Set("user_tier", u.Tier.String)
-		
+
 		ctx := context.WithValue(c.Request().Context(), userIDKey, u.ID)
 		ctx = context.WithValue(ctx, userTierKey, u.Tier.String)
 		c.SetRequest(c.Request().WithContext(ctx))
@@ -191,4 +191,3 @@ func NetHttpAuthMiddleware(next http.Handler, mcpServer *server.MCPServer) http.
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
-

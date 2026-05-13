@@ -15,8 +15,8 @@ const (
 	QuotaPlus = 10
 	QuotaPro  = 20
 
-	PolicySkip          = "skip"
-	PolicyRunImmediate  = "run_immediately"
+	PolicySkip         = "skip"
+	PolicyRunImmediate = "run_immediately"
 
 	TriggerCron     = "cron"
 	TriggerInterval = "interval"

@@ -7,7 +7,7 @@ import (
 
 func TestExecuteNativeJS(t *testing.T) {
 	ctx := context.Background()
-	
+
 	tests := []struct {
 		name    string
 		code    string
@@ -35,7 +35,7 @@ func TestExecuteNativeJS(t *testing.T) {
 			wantErr: true,
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := executeNativeJS(ctx, tt.code, tt.input)

@@ -562,9 +562,9 @@ func apiCreateWebhookHandler(c echo.Context) error {
 	eventTypesJSON, _ := json.Marshal(input.EventTypes)
 
 	row, err := queries.CreateOutboundWebhook(c.Request().Context(), db.CreateOutboundWebhookParams{
-		UserID:                  user.ID,
-		EndpointUrl:             input.EndpointURL,
-		EventTypes:              eventTypesJSON,
+		UserID:                 user.ID,
+		EndpointUrl:            input.EndpointURL,
+		EventTypes:             eventTypesJSON,
 		EncryptedSigningSecret: encryptedSecret,
 	})
 	if err != nil {

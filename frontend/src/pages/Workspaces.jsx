@@ -268,7 +268,7 @@ const Workspaces = () => {
                 <div>
                   <h2 className="text-2xl font-black text-white uppercase tracking-tighter mb-1">{w.name}</h2>
                   <div className="flex items-center gap-2">
-                    <span className="text-[10px] text-slate-500 font-mono uppercase tracking-[0.1em] px-2 py-0.5 bg-white/5 rounded-md">ID: {w.id.substring(0, 8)}...</span>
+                    <span className="text-[10px] text-slate-500 font-mono uppercase tracking-[0.1em] px-2 py-0.5 bg-white/5 rounded-md">ID: {w.id ? w.id.substring(0, 8) : 'N/A'}...</span>
                     <span className="text-[10px] text-slate-500 font-medium uppercase tracking-widest">Created {new Date(w.created_at).toLocaleDateString()}</span>
                   </div>
                 </div>

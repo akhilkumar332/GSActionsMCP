@@ -86,7 +86,7 @@ func main() {
 	// Use migrate.New with the database URL for simplicity
 	m, err := migrate.New(
 		"file://migrations", // Path to migration files
-		dbUrl,              // Database connection URL
+		dbUrl,               // Database connection URL
 	)
 
 	if err != nil {

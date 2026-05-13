@@ -87,7 +87,7 @@ func handleGetWorkers(c echo.Context) error {
 	now := time.Now().UTC()
 	for _, w := range workers {
 		status := "offline"
-		if w.LastHeartbeat.Valid && w.LastHeartbeat.Time.After(now.Add(-2 * time.Minute)) {
+		if w.LastHeartbeat.Valid && w.LastHeartbeat.Time.After(now.Add(-2*time.Minute)) {
 			status = "online"
 		}
 

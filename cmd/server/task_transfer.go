@@ -122,7 +122,7 @@ func importUserTasks(ctx context.Context, userID string, tasks []TransferTask) (
 		if !ok {
 			return nil, fmt.Errorf("dependency %q for task %q was not included in the import bundle", task.DependsOnLegacyID, task.LegacyID)
 		}
-		
+
 		err := queries.LinkTaskDependency(ctx, db.LinkTaskDependencyParams{
 			DependsOnTaskID:     pgtype.UUID{Bytes: parentID.Bytes, Valid: true},
 			TriggerOnCompletion: pgtype.Bool{Bool: task.TriggerOnCompletion, Valid: true},
