@@ -582,6 +582,20 @@ func (q *Queries) DeleteWebSession(ctx context.Context, id pgtype.UUID) error {
 	return err
 }
 
+const deleteWorkspaceEnvVar = `-- name: DeleteWorkspaceEnvVar :exec
+DELETE FROM workspace_env_vars WHERE workspace_id = $1 AND name = $2
+`
+
+type DeleteWorkspaceEnvVarParams struct {
+	WorkspaceID pgtype.UUID
+	Name        string
+}
+
+func (q *Queries) DeleteWorkspaceEnvVar(ctx context.Context, arg DeleteWorkspaceEnvVarParams) error {
+	_, err := q.db.Exec(ctx, deleteWorkspaceEnvVar, arg.WorkspaceID, arg.Name)
+	return err
+}
+
 const exportUserTasks = `-- name: ExportUserTasks :many
 SELECT id, user_id, name, trigger_type, trigger_config, agent_prompt, status, locked_by, next_run, last_run, failure_count, missed_task_policy, depends_on_task_id, created_at, requires_approval, encrypted_secrets, last_approval_status, trigger_on_completion, task_type, native_code, workspace_id, max_retries, retry_count, backoff_strategy, ui_coordinates FROM tasks WHERE user_id = $1
 `
@@ -1055,6 +1069,38 @@ func (q *Queries) GetTaskVersionByID(ctx context.Context, arg GetTaskVersionByID
 		&i.CreatedAt,
 	)
 	return i, err
+}
+
+const getTaskWorkspaceEnvVars = `-- name: GetTaskWorkspaceEnvVars :many
+SELECT e.name, e.value 
+FROM workspace_env_vars e
+JOIN tasks t ON e.workspace_id = t.workspace_id
+WHERE t.id = $1
+`
+
+type GetTaskWorkspaceEnvVarsRow struct {
+	Name  string
+	Value string
+}
+
+func (q *Queries) GetTaskWorkspaceEnvVars(ctx context.Context, id pgtype.UUID) ([]GetTaskWorkspaceEnvVarsRow, error) {
+	rows, err := q.db.Query(ctx, getTaskWorkspaceEnvVars, id)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetTaskWorkspaceEnvVarsRow
+	for rows.Next() {
+		var i GetTaskWorkspaceEnvVarsRow
+		if err := rows.Scan(&i.Name, &i.Value); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const getTemplateByIDRaw = `-- name: GetTemplateByIDRaw :one
@@ -1651,6 +1697,37 @@ func (q *Queries) ListWebhookDeliveries(ctx context.Context, arg ListWebhookDeli
 	return items, nil
 }
 
+const listWorkspaceEnvVars = `-- name: ListWorkspaceEnvVars :many
+SELECT id, workspace_id, name, value, created_at, updated_at FROM workspace_env_vars WHERE workspace_id = $1 ORDER BY name ASC
+`
+
+func (q *Queries) ListWorkspaceEnvVars(ctx context.Context, workspaceID pgtype.UUID) ([]WorkspaceEnvVar, error) {
+	rows, err := q.db.Query(ctx, listWorkspaceEnvVars, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []WorkspaceEnvVar
+	for rows.Next() {
+		var i WorkspaceEnvVar
+		if err := rows.Scan(
+			&i.ID,
+			&i.WorkspaceID,
+			&i.Name,
+			&i.Value,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const moveToDLQ = `-- name: MoveToDLQ :one
 INSERT INTO dlq_tasks (task_id, error_message) VALUES ($1, $2) RETURNING id, task_id, error_message, failed_at
 `
@@ -1981,4 +2058,33 @@ type UpsertWorkerHeartbeatParams struct {
 func (q *Queries) UpsertWorkerHeartbeat(ctx context.Context, arg UpsertWorkerHeartbeatParams) error {
 	_, err := q.db.Exec(ctx, upsertWorkerHeartbeat, arg.WorkerID, arg.Hostname, arg.TaskCount)
 	return err
+}
+
+const upsertWorkspaceEnvVar = `-- name: UpsertWorkspaceEnvVar :one
+INSERT INTO workspace_env_vars (workspace_id, name, value)
+VALUES ($1, $2, $3)
+ON CONFLICT (workspace_id, name) DO UPDATE SET
+    value = EXCLUDED.value,
+    updated_at = CURRENT_TIMESTAMP
+RETURNING id, workspace_id, name, value, created_at, updated_at
+`
+
+type UpsertWorkspaceEnvVarParams struct {
+	WorkspaceID pgtype.UUID
+	Name        string
+	Value       string
+}
+
+func (q *Queries) UpsertWorkspaceEnvVar(ctx context.Context, arg UpsertWorkspaceEnvVarParams) (WorkspaceEnvVar, error) {
+	row := q.db.QueryRow(ctx, upsertWorkspaceEnvVar, arg.WorkspaceID, arg.Name, arg.Value)
+	var i WorkspaceEnvVar
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.Name,
+		&i.Value,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
 }

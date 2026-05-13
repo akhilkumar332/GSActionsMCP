@@ -189,6 +189,15 @@ type Workspace struct {
 	CreatedAt pgtype.Timestamptz
 }
 
+type WorkspaceEnvVar struct {
+	ID          pgtype.UUID
+	WorkspaceID pgtype.UUID
+	Name        string
+	Value       string
+	CreatedAt   pgtype.Timestamptz
+	UpdatedAt   pgtype.Timestamptz
+}
+
 type WorkspaceMember struct {
 	WorkspaceID pgtype.UUID
 	UserID      string

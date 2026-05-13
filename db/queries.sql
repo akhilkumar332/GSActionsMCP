@@ -333,3 +333,23 @@ SET
     native_code = v.native_code
 FROM task_versions v
 WHERE tasks.id = $1 AND tasks.user_id = $2 AND v.id = $3 AND v.task_id = $1;
+
+-- name: UpsertWorkspaceEnvVar :one
+INSERT INTO workspace_env_vars (workspace_id, name, value)
+VALUES ($1, $2, $3)
+ON CONFLICT (workspace_id, name) DO UPDATE SET
+    value = EXCLUDED.value,
+    updated_at = CURRENT_TIMESTAMP
+RETURNING *;
+
+-- name: ListWorkspaceEnvVars :many
+SELECT * FROM workspace_env_vars WHERE workspace_id = $1 ORDER BY name ASC;
+
+-- name: DeleteWorkspaceEnvVar :exec
+DELETE FROM workspace_env_vars WHERE workspace_id = $1 AND name = $2;
+
+-- name: GetTaskWorkspaceEnvVars :many
+SELECT e.name, e.value 
+FROM workspace_env_vars e
+JOIN tasks t ON e.workspace_id = t.workspace_id
+WHERE t.id = $1;
