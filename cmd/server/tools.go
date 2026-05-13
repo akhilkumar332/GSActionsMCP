@@ -273,11 +273,13 @@ func registerTools(s *server.MCPServer) {
 			"task_id": id,
 			"status":  StatusPaused,
 		})
-		_ = PublishEvent(ctx, PubSubEvent{
+		if err := PublishEvent(ctx, PubSubEvent{
 			UserID:    userID,
 			EventType: "task_status_changed",
 			Payload:   string(evtPayload),
-		})
+		}); err != nil {
+			log.Printf("Error publishing task_status_changed event: %v", err)
+		}
 		writeAuditLog(ctx, AuditEvent{
 			UserID:       userID,
 			Action:       "task.pause",
@@ -333,11 +335,13 @@ func registerTools(s *server.MCPServer) {
 
 		// Emit Redis event
 		payload, _ := json.Marshal(map[string]string{"task_id": id, "status": StatusActive})
-		_ = PublishEvent(ctx, PubSubEvent{
+		if err := PublishEvent(ctx, PubSubEvent{
 			UserID:    userID,
 			EventType: "task_status_changed",
 			Payload:   string(payload),
-		})
+		}); err != nil {
+			log.Printf("Error publishing task_status_changed event: %v", err)
+		}
 		writeAuditLog(ctx, AuditEvent{
 			UserID:       userID,
 			Action:       "task.resume",

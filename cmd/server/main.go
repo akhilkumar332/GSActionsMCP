@@ -328,5 +328,13 @@ func main() {
 	if err := e.Shutdown(shutdownCtx); err != nil {
 		log.Fatalf("Server Shutdown Failed: %+v", err)
 	}
+
+	if dbPool != nil {
+		dbPool.Close()
+	}
+	if RedisClient != nil {
+		RedisClient.Close()
+	}
+
 	log.Println("Server exited properly")
 }

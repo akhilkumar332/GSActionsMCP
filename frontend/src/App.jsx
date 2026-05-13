@@ -15,6 +15,7 @@ import WorkflowCanvas from './pages/WorkflowCanvas';
 import AdminUsers from './pages/AdminUsers';
 import AdminSEO from './pages/AdminSEO';
 import Insights from './pages/Insights';
+import Workers from './pages/Workers';
 import { 
   Overview, 
   QuickStart, 
@@ -171,6 +172,15 @@ function App() {
             element={
               <ProtectedRoute roles={['admin']}>
                 <Insights />
+              </ProtectedRoute>
+            } 
+          />
+
+          <Route 
+            path="/admin/workers" 
+            element={
+              <ProtectedRoute roles={['admin']}>
+                <Workers />
               </ProtectedRoute>
             } 
           />

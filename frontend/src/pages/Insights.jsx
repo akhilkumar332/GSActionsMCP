@@ -5,12 +5,14 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
   AreaChart, Area, Cell 
 } from 'recharts';
-import { BarChart3, Activity, Zap, Users, ShieldCheck } from 'lucide-react';
+import { BarChart3, Activity, Zap, Users, ShieldCheck, ArrowRight, Server } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
 
 const Insights = () => {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
 
   useEffect(() => {
     const fetchInsights = async () => {
@@ -76,6 +78,27 @@ const Insights = () => {
           trend="Stable" 
           color="text-blue-400"
         />
+      </div>
+
+      <div className="mb-12">
+        <motion.div 
+          whileHover={{ y: -5 }}
+          onClick={() => navigate('/admin/workers')}
+          className="bg-white/5 border border-white/10 rounded-[2.5rem] p-8 backdrop-blur-3xl cursor-pointer hover:bg-white/[0.08] transition-all flex items-center justify-between group"
+        >
+          <div className="flex items-center gap-6">
+            <div className="bg-blue-500/10 p-5 rounded-[1.5rem] text-blue-400">
+              <Server size={28} />
+            </div>
+            <div>
+              <h2 className="text-2xl font-black text-white uppercase tracking-tighter mb-1">Infrastructure Health</h2>
+              <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">Manage and monitor active execution nodes</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-4 text-blue-400 font-black uppercase tracking-widest text-xs">
+            View Registry <ArrowRight size={16} className="group-hover:translate-x-2 transition-transform" />
+          </div>
+        </motion.div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">

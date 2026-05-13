@@ -1,5 +1,5 @@
 import DocumentationLayout from '../components/DocumentationLayout';
-import { Terminal, Shield, Zap, Globe, Layers, Settings, Database, Code } from 'lucide-react';
+import { Terminal, Shield, Zap, Globe, Layers, Settings, Database, Code, History } from 'lucide-react';
 
 const Overview = () => (
   <DocumentationLayout>
@@ -189,6 +189,34 @@ const CoreConcepts = () => (
               Execution doesn't happen on our server. Instead, we use a **Pub/Sub bridge** to notify your 
               physical client session that a task is due. Your client then "samples" the LLM and 
               returns the output to us for logging and further scheduling.
+            </p>
+          </div>
+        </div>
+
+        <div className="flex gap-8 group">
+          <div className="flex-shrink-0 w-12 h-12 bg-white border border-slate-200 rounded-2xl flex items-center justify-center shadow-sm group-hover:bg-blue-600 group-hover:text-white transition-colors duration-500">
+            <History size={24} />
+          </div>
+          <div>
+            <h3 className="text-2xl font-bold text-ink-900 mb-2">Immutable Versioning</h3>
+            <p className="text-slate-600 leading-relaxed">
+              Every time you update a task's prompt or configuration, the system automatically creates 
+              an immutable snapshot. This allows you to view history and perform **one-click rollbacks** 
+              if a prompt modification leads to unexpected AI behavior.
+            </p>
+          </div>
+        </div>
+
+        <div className="flex gap-8 group">
+          <div className="flex-shrink-0 w-12 h-12 bg-white border border-slate-200 rounded-2xl flex items-center justify-center shadow-sm group-hover:bg-emerald-600 group-hover:text-white transition-colors duration-500">
+            <Globe size={24} />
+          </div>
+          <div>
+            <h3 className="text-2xl font-bold text-ink-900 mb-2">Workspace Environment</h3>
+            <p className="text-slate-600 leading-relaxed">
+              Isolate configurations using Workspaces. You can define environment variables at the 
+              workspace level and inject them into any task prompt using the <code>{`{{env.KEY}}`}</code> 
+              syntax, enabling seamless switching between dev, staging, and production contexts.
             </p>
           </div>
         </div>
@@ -384,6 +412,15 @@ const WorkerArchitecture = () => (
           To ensure reliability, a separate <strong>Reaper</strong> process runs every 1 minute. 
           It scans the database for tasks that have been in the "processing" state for more than 5 minutes 
           (indicating a worker node failure) and resets them back to "active" for another node to pick up.
+        </p>
+      </section>
+
+      <section>
+        <h2 className="text-2xl font-bold text-ink-900 mb-4">Worker Heartbeats</h2>
+        <p>
+          Each execution node maintains a persistent heartbeat. Every 30 seconds, the node updates its 
+          status in the central registry. If a node fails to heartbeat for more than 2 minutes, the 
+          system automatically flags it as offline and reassigns its pending workload.
         </p>
       </section>
     </div>

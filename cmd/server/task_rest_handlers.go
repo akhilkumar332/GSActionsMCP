@@ -118,10 +118,12 @@ func apiUpdateTaskHandler(c echo.Context) error {
 	}
 
 	// Auto-snapshot before update
-	_, _ = queries.CreateTaskVersion(c.Request().Context(), db.CreateTaskVersionParams{
+	if _, err := queries.CreateTaskVersion(c.Request().Context(), db.CreateTaskVersionParams{
 		ID:     taskID,
 		UserID: userID,
-	})
+	}); err != nil {
+		log.Printf("Warning: Failed to create task version snapshot for %s: %v", taskIDStr, err)
+	}
 
 	err = queries.UpdateTaskAgentPromptAndPolicy(c.Request().Context(), db.UpdateTaskAgentPromptAndPolicyParams{
 		AgentPrompt:      req.AgentPrompt,
@@ -178,10 +180,12 @@ func apiRestoreTaskVersionHandler(c echo.Context) error {
 	}
 
 	// 1. Create a snapshot of CURRENT state before rolling back
-	_, _ = queries.CreateTaskVersion(c.Request().Context(), db.CreateTaskVersionParams{
+	if _, err := queries.CreateTaskVersion(c.Request().Context(), db.CreateTaskVersionParams{
 		ID:     taskID,
 		UserID: userID,
-	})
+	}); err != nil {
+		log.Printf("Warning: Failed to create current state snapshot before restore for %s: %v", taskIDStr, err)
+	}
 
 	// 2. Restore
 	err := queries.RestoreTaskFromVersion(c.Request().Context(), db.RestoreTaskFromVersionParams{

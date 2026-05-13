@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import DashboardLayout from '../components/DashboardLayout';
 import axios from 'axios';
-import { Play, Pause, Trash2, CheckCircle2, ShieldAlert, Cpu, Link, History } from 'lucide-react';
+import { Play, Pause, Trash2, CheckCircle2, ShieldAlert, Cpu, Link, History, Globe } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 
@@ -98,7 +98,17 @@ const Tasks = () => {
                     <div className="flex items-center gap-3">
                        <Cpu size={16} className="text-accent-orange" />
                        <div>
-                          <div className="text-white font-bold">{task.name}</div>
+                          <div className="flex items-center gap-2">
+                            <div className="text-white font-bold">{task.name}</div>
+                            {task.version_count > 1 && (
+                              <span className="text-[9px] font-black bg-blue-500/20 text-blue-400 px-1.5 py-0.5 rounded-md uppercase tracking-tighter" title={`${task.version_count} versions available`}>
+                                v{task.version_count}
+                              </span>
+                            )}
+                            {task.agent_prompt.includes('{{env.') && (
+                              <Globe size={10} className="text-emerald-500" title="Uses Workspace Environment Variables" />
+                            )}
+                          </div>
                           {task.depends_on_task_id && (
                             <div className="text-[10px] text-slate-500 flex items-center gap-1 mt-1 uppercase tracking-widest font-bold">
                               <Link size={10} className="text-blue-400" /> Depends on: {task.depends_on_task_id.substring(0, 8)}...
