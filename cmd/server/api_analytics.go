@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"net/http"
 	"time"
 
@@ -63,6 +64,54 @@ func handleGetSystemInsights(c echo.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, APIResponse{Success: true, Data: data})
+}
+
+func handleGetTrends(c echo.Context) error {
+	ctx := c.Request().Context()
+
+	// 1. Total Tasks Trends (Current 30d vs Previous 30d)
+	var currentTasks, prevTasks int64
+	_ = dbPool.QueryRow(ctx, "SELECT COUNT(*) FROM execution_traces WHERE start_time > NOW() - INTERVAL '30 days'").Scan(&currentTasks)
+	_ = dbPool.QueryRow(ctx, "SELECT COUNT(*) FROM execution_traces WHERE start_time > NOW() - INTERVAL '60 days' AND start_time <= NOW() - INTERVAL '30 days'").Scan(&prevTasks)
+
+	// 2. Success Rate Trends
+	var currentSuccess, prevSuccess float64
+	_ = dbPool.QueryRow(ctx, `
+		SELECT COALESCE((COUNT(*) FILTER (WHERE is_error = FALSE)::float / NULLIF(COUNT(*), 0)::float) * 100, 100)
+		FROM execution_traces WHERE start_time > NOW() - INTERVAL '30 days'
+	`).Scan(&currentSuccess)
+	_ = dbPool.QueryRow(ctx, `
+		SELECT COALESCE((COUNT(*) FILTER (WHERE is_error = FALSE)::float / NULLIF(COUNT(*), 0)::float) * 100, 100)
+		FROM execution_traces WHERE start_time > NOW() - INTERVAL '60 days' AND start_time <= NOW() - INTERVAL '30 days'
+	`).Scan(&prevSuccess)
+
+	// 3. User Growth
+	var currentUsers, prevUsers int64
+	_ = dbPool.QueryRow(ctx, "SELECT COUNT(*) FROM users WHERE created_at > NOW() - INTERVAL '30 days'").Scan(&currentUsers)
+	_ = dbPool.QueryRow(ctx, "SELECT COUNT(*) FROM users WHERE created_at > NOW() - INTERVAL '60 days' AND created_at <= NOW() - INTERVAL '30 days'").Scan(&prevUsers)
+
+	calcGrowth := func(curr, prev float64) string {
+		if prev == 0 {
+			if curr > 0 {
+				return "+100%"
+			}
+			return "0%"
+		}
+		growth := ((curr - prev) / prev) * 100
+		if growth >= 0 {
+			return fmt.Sprintf("+%.1f%%", growth)
+		}
+		return fmt.Sprintf("%.1f%%", growth)
+	}
+
+	return c.JSON(http.StatusOK, APIResponse{
+		Success: true,
+		Data: map[string]string{
+			"tasks_growth":   calcGrowth(float64(currentTasks), float64(prevTasks)),
+			"success_growth": calcGrowth(currentSuccess, prevSuccess),
+			"users_growth":   calcGrowth(float64(currentUsers), float64(prevUsers)),
+		},
+	})
 }
 
 func handleGetWorkers(c echo.Context) error {

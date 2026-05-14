@@ -238,6 +238,7 @@ func main() {
 	admin.GET("/audit-logs", apiAdminAuditLogsHandler)
 	admin.GET("/usage", apiAdminUsageHandler)
 	admin.GET("/insights", handleGetSystemInsights)
+	admin.GET("/analytics/trends", handleGetTrends)
 	admin.GET("/workers", handleGetWorkers)
 	admin.GET("/seo", apiGetSEOHandler)
 	admin.POST("/seo", apiUpdateSEOHandler)

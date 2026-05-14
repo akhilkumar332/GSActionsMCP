@@ -11,15 +11,22 @@ import { useNavigate } from 'react-router-dom';
 
 const Insights = () => {
   const [data, setData] = useState(null);
+  const [trends, setTrends] = useState(null);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
   useEffect(() => {
     const fetchInsights = async () => {
       try {
-        const res = await axios.get('/api/admin/insights');
-        if (res.data.success) {
-          setData(res.data.data);
+        const [insightsRes, trendsRes] = await Promise.all([
+          axios.get('/api/admin/insights'),
+          axios.get('/api/admin/analytics/trends')
+        ]);
+        if (insightsRes.data.success) {
+          setData(insightsRes.data.data);
+        }
+        if (trendsRes.data.success) {
+          setTrends(trendsRes.data.data);
         }
       } catch (err) {
         console.error('Failed to fetch insights', err);
@@ -61,21 +68,21 @@ const Insights = () => {
           icon={Zap} 
           label="P99 Latency" 
           value={`${data?.p99_latency}ms`} 
-          trend="+2.4%" 
+          trend={trends?.tasks_growth || 'Stable'} 
           color="text-amber-400"
         />
         <MetricCard 
           icon={ShieldCheck} 
           label="Success Rate" 
           value={`${data?.success_rate}%`} 
-          trend="+0.2%" 
+          trend={trends?.success_growth || 'Stable'} 
           color="text-emerald-400"
         />
         <MetricCard 
           icon={Users} 
-          label="Active Workers" 
+          label="Growth Index" 
           value={data?.active_workers} 
-          trend="Stable" 
+          trend={trends?.users_growth || 'Stable'} 
           color="text-blue-400"
         />
       </div>
