@@ -16,17 +16,17 @@
   - [x] Step 6: Write unit tests for branching and piping
   - [x] Step 7: Commit changes
 
-- [ ] **Task 3: Frontend - Task Wizard Enhancements**
-  - [ ] Step 1: Add "Logic & Connections" step to the wizard
-  - [ ] Step 2: Implement "Variable Injector" in the prompt field
-  - [ ] Step 3: Update handleSubmit to include new fields
-  - [ ] Step 4: Commit changes
+- [x] **Task 3: Frontend - Task Wizard Enhancements**
+  - [x] Step 1: Add "Logic & Connections" step to the wizard
+  - [x] Step 2: Implement "Variable Injector" in the prompt field
+  - [x] Step 3: Update handleSubmit to include new fields
+  - [x] Step 4: Commit changes
 
-- [ ] **Task 4: Frontend - Workflow Canvas Interactive Mode**
-  - [ ] Step 1: Implement onConnect handler
-  - [ ] Step 2: Add sidebar editing
-  - [ ] Step 3: Implement Live Pulse
-  - [ ] Step 4: Commit changes
+- [x] **Task 4: Frontend - Workflow Canvas Interactive Mode**
+  - [x] Step 1: Implement onConnect handler
+  - [x] Step 2: Add sidebar editing
+  - [x] Step 3: Implement Live Pulse
+  - [x] Step 4: Commit changes
 
 - [ ] **Task 5: Marketplace - Multi-Task Blueprints**
   - [ ] Step 1: Update templates schema to support multiple tasks

@@ -213,6 +213,7 @@ func main() {
 	api.POST("/tasks", apiCreateTaskHandler)
 	api.GET("/tasks/export", apiExportTasksHandler)
 	api.POST("/tasks/import", apiImportTasksHandler)
+	api.POST("/tasks/:id/link", apiLinkTaskHandler)
 	api.POST("/tasks/:id/pause", apiPauseTaskHandler)
 	api.POST("/tasks/:id/resume", apiResumeTaskHandler)
 	api.DELETE("/tasks/:id", apiDeleteTaskHandler)
@@ -221,6 +222,7 @@ func main() {
 	api.POST("/tasks/:id/restore/:version_id", apiRestoreTaskVersionHandler)
 	api.POST("/tasks/:id/approve", apiApproveTaskHandler)
 	api.POST("/tasks/:id/deny", apiDenyTaskHandler)
+	api.GET("/events", apiEventsHandler)
 	api.GET("/secrets", apiListSecretsHandler)
 	api.POST("/secrets", apiUpsertSecretHandler)
 	api.DELETE("/secrets/:name", apiDeleteSecretHandler)
@@ -258,6 +260,7 @@ func main() {
 	v1.GET("/templates", handleListPublicTemplates, EchoSessionMiddleware)
 	v1.POST("/templates", handleCreateTemplate, EchoSessionMiddleware)
 	v1.POST("/templates/:id/increment-uses", handleIncrementTemplateUses, EchoSessionMiddleware)
+	v1.POST("/blueprints/deploy", apiDeployBlueprintHandler, EchoSessionMiddleware)
 
 	// Task routes for frontend TaskWizard
 	v1.GET("/tasks", apiListTasksHandler, csrfMiddleware, EchoSessionMiddleware)

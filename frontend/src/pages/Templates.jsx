@@ -33,13 +33,39 @@ const Templates = () => {
         return () => clearTimeout(timer);
     }, [search]);
 
-    const handleUseBlueprint = (template) => {
-        setSelectedTemplate({
-            id: template.id,
-            name: `${template.name} (Copy)`,
-            ...template.config
-        });
-        setIsWizardOpen(true);
+    const handleUseBlueprint = async (template) => {
+        // config might be a string if not automatically parsed, but axios usually parses it
+        const config = typeof template.config === 'string' ? JSON.parse(template.config) : template.config;
+
+        if (Array.isArray(config)) {
+            // It's a multi-task blueprint bundle
+            if (!confirm(`This blueprint contains ${config.length} tasks. Deploy this bundle to your workspace?`)) return;
+            
+            setLoading(true);
+            try {
+                const res = await axios.post('/api/v1/blueprints/deploy', {
+                    template_id: template.id,
+                    variables: {} // Future: show a modal to collect variables
+                });
+                if (res.data.success) {
+                    // Redirect to canvas to see the new workflow
+                    window.location.href = '/canvas';
+                }
+            } catch (err) {
+                console.error('Failed to deploy blueprint bundle', err);
+                alert('Failed to deploy blueprint bundle. Please try again.');
+            } finally {
+                setLoading(false);
+            }
+        } else {
+            // Single task blueprint
+            setSelectedTemplate({
+                id: template.id,
+                name: `${template.name} (Copy)`,
+                ...config
+            });
+            setIsWizardOpen(true);
+        }
     };
 
     return (

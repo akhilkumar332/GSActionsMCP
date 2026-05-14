@@ -12,15 +12,18 @@ import (
 )
 
 type CreateTaskRequest struct {
-	Name             string          `json:"name"`
-	WorkspaceID      string          `json:"workspace_id"`
-	TaskType         string          `json:"task_type"`
-	AgentPrompt      string          `json:"agent_prompt"`
-	NativeCode       string          `json:"native_code"`
-	TriggerType      string          `json:"trigger_type"`
-	TriggerConfig    json.RawMessage `json:"trigger_config"`
-	RequiresApproval bool            `json:"requires_approval"`
-	MissedTaskPolicy string          `json:"missed_task_policy"`
+	Name                string          `json:"name"`
+	WorkspaceID         string          `json:"workspace_id"`
+	TaskType            string          `json:"task_type"`
+	AgentPrompt         string          `json:"agent_prompt"`
+	NativeCode          string          `json:"native_code"`
+	TriggerType         string          `json:"trigger_type"`
+	TriggerConfig       json.RawMessage `json:"trigger_config"`
+	RequiresApproval    bool            `json:"requires_approval"`
+	MissedTaskPolicy    string          `json:"missed_task_policy"`
+	DependsOnTaskID     string          `json:"depends_on_task_id"`
+	TriggerOnCompletion bool            `json:"trigger_on_completion"`
+	BranchCondition     json.RawMessage `json:"branch_condition"`
 }
 
 func apiCreateTaskHandler(c echo.Context) error {
@@ -41,6 +44,13 @@ func apiCreateTaskHandler(c echo.Context) error {
 		}
 	}
 
+	var dependsOnTaskID pgtype.UUID
+	if req.DependsOnTaskID != "" {
+		if err := parseUUID(req.DependsOnTaskID, &dependsOnTaskID); err != nil {
+			return c.JSON(http.StatusBadRequest, APIResponse{Success: false, Error: "Invalid parent task ID"})
+		}
+	}
+
 	// Default missed task policy if not provided
 	policy := req.MissedTaskPolicy
 	if policy == "" {
@@ -48,17 +58,20 @@ func apiCreateTaskHandler(c echo.Context) error {
 	}
 
 	params := db.CreateTaskParams{
-		UserID:           userID,
-		Name:             req.Name,
-		TriggerType:      pgtype.Text{String: req.TriggerType, Valid: true},
-		TriggerConfig:    req.TriggerConfig,
-		AgentPrompt:      req.AgentPrompt,
-		WorkspaceID:      workspaceID,
-		TaskType:         pgtype.Text{String: req.TaskType, Valid: true},
-		NativeCode:       pgtype.Text{String: req.NativeCode, Valid: true},
-		MissedTaskPolicy: pgtype.Text{String: policy, Valid: true},
-		RequiresApproval: pgtype.Bool{Bool: req.RequiresApproval, Valid: true},
-		NextRun:          pgtype.Timestamptz{Time: time.Now(), Valid: true},
+		UserID:              userID,
+		Name:                req.Name,
+		TriggerType:         pgtype.Text{String: req.TriggerType, Valid: true},
+		TriggerConfig:       req.TriggerConfig,
+		AgentPrompt:         req.AgentPrompt,
+		WorkspaceID:         workspaceID,
+		TaskType:            pgtype.Text{String: req.TaskType, Valid: true},
+		NativeCode:          pgtype.Text{String: req.NativeCode, Valid: true},
+		MissedTaskPolicy:    pgtype.Text{String: policy, Valid: true},
+		RequiresApproval:    pgtype.Bool{Bool: req.RequiresApproval, Valid: true},
+		DependsOnTaskID:     dependsOnTaskID,
+		TriggerOnCompletion: pgtype.Bool{Bool: req.TriggerOnCompletion, Valid: true},
+		BranchCondition:     req.BranchCondition,
+		NextRun:             pgtype.Timestamptz{Time: time.Now(), Valid: true},
 	}
 
 	task, err := queries.CreateTask(c.Request().Context(), params)
@@ -160,9 +173,12 @@ func apiDeleteTaskHandler(c echo.Context) error {
 }
 
 type UpdateTaskRequest struct {
-	AgentPrompt      string          `json:"agent_prompt"`
-	MissedTaskPolicy string          `json:"missed_task_policy"`
-	UICoordinates    json.RawMessage `json:"ui_coordinates"`
+	AgentPrompt         string          `json:"agent_prompt"`
+	MissedTaskPolicy    string          `json:"missed_task_policy"`
+	UICoordinates       json.RawMessage `json:"ui_coordinates"`
+	DependsOnTaskID     string          `json:"depends_on_task_id"`
+	TriggerOnCompletion bool            `json:"trigger_on_completion"`
+	BranchCondition     json.RawMessage `json:"branch_condition"`
 }
 
 func apiUpdateTaskHandler(c echo.Context) error {
@@ -268,4 +284,45 @@ func apiRestoreTaskVersionHandler(c echo.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, APIResponse{Success: true, Message: "Task restored successfully"})
+}
+
+type LinkTaskRequest struct {
+	DependsOnTaskID     string `json:"depends_on_task_id"`
+	TriggerOnCompletion bool   `json:"trigger_on_completion"`
+}
+
+func apiLinkTaskHandler(c echo.Context) error {
+	userID := getUserID(c)
+	if userID == "" {
+		return c.JSON(http.StatusUnauthorized, APIResponse{Success: false, Error: "Unauthorized"})
+	}
+	taskIDStr := c.Param("id")
+	var taskID pgtype.UUID
+	if err := parseUUID(taskIDStr, &taskID); err != nil {
+		return c.JSON(http.StatusBadRequest, APIResponse{Success: false, Error: "Invalid task ID"})
+	}
+
+	var req LinkTaskRequest
+	if err := c.Bind(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, APIResponse{Success: false, Error: "Invalid request body"})
+	}
+
+	var dependsOnTaskID pgtype.UUID
+	if req.DependsOnTaskID != "" {
+		if err := parseUUID(req.DependsOnTaskID, &dependsOnTaskID); err != nil {
+			return c.JSON(http.StatusBadRequest, APIResponse{Success: false, Error: "Invalid dependency task ID"})
+		}
+	}
+
+	err := queries.LinkTaskDependency(c.Request().Context(), db.LinkTaskDependencyParams{
+		DependsOnTaskID:     dependsOnTaskID,
+		TriggerOnCompletion: pgtype.Bool{Bool: req.TriggerOnCompletion, Valid: true},
+		ID:                  taskID,
+		UserID:              userID,
+	})
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, APIResponse{Success: false, Error: "Failed to link tasks"})
+	}
+
+	return c.JSON(http.StatusOK, APIResponse{Success: true, Message: "Tasks linked successfully"})
 }

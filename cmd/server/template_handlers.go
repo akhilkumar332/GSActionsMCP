@@ -3,8 +3,12 @@ package main
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
+	"log"
 	"net/http"
 	"schedule-mcp/db"
+	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -17,6 +21,137 @@ type createTemplateRequest struct {
 	Config      json.RawMessage `json:"config"`
 	IsPublic    bool            `json:"is_public"`
 	WorkspaceID string          `json:"workspace_id,omitempty"`
+}
+
+type deployBlueprintRequest struct {
+	TemplateID  string            `json:"template_id"`
+	WorkspaceID string            `json:"workspace_id"`
+	Variables   map[string]string `json:"variables"`
+}
+
+type blueprintTask struct {
+	ID                  string          `json:"id"`
+	Name                string          `json:"name"`
+	TaskType            string          `json:"task_type"`
+	AgentPrompt         string          `json:"agent_prompt"`
+	NativeCode          string          `json:"native_code"`
+	TriggerType         string          `json:"trigger_type"`
+	TriggerConfig       json.RawMessage `json:"trigger_config"`
+	RequiresApproval    bool            `json:"requires_approval"`
+	MissedTaskPolicy    string          `json:"missed_task_policy"`
+	DependsOn           string          `json:"depends_on"` // Temporary ID from blueprint
+	TriggerOnCompletion bool            `json:"trigger_on_completion"`
+	BranchCondition     json.RawMessage `json:"branch_condition"`
+	IsBundleRoot        bool            `json:"is_bundle_root"`
+}
+
+func apiDeployBlueprintHandler(c echo.Context) error {
+	userID := getUserID(c)
+	if userID == "" {
+		return c.JSON(http.StatusUnauthorized, APIResponse{Success: false, Error: "Unauthorized"})
+	}
+
+	var req deployBlueprintRequest
+	if err := c.Bind(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, APIResponse{Success: false, Error: "Invalid request payload"})
+	}
+
+	var templateID pgtype.UUID
+	if err := parseUUID(req.TemplateID, &templateID); err != nil {
+		return c.JSON(http.StatusBadRequest, APIResponse{Success: false, Error: "Invalid template_id"})
+	}
+
+	template, err := queries.GetTemplateByIDRaw(c.Request().Context(), templateID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return c.JSON(http.StatusNotFound, APIResponse{Success: false, Error: "Template not found"})
+		}
+		return c.JSON(http.StatusInternalServerError, APIResponse{Success: false, Error: "Failed to fetch template"})
+	}
+
+	var tasks []blueprintTask
+	if err := json.Unmarshal(template.Config, &tasks); err != nil {
+		// Try unmarshaling as a single task if array fails
+		var singleTask blueprintTask
+		if err2 := json.Unmarshal(template.Config, &singleTask); err2 == nil {
+			tasks = []blueprintTask{singleTask}
+		} else {
+			return c.JSON(http.StatusInternalServerError, APIResponse{Success: false, Error: "Invalid template configuration"})
+		}
+	}
+
+	var workspaceID pgtype.UUID
+	if req.WorkspaceID != "" {
+		if err := parseUUID(req.WorkspaceID, &workspaceID); err != nil {
+			return c.JSON(http.StatusBadRequest, APIResponse{Success: false, Error: "Invalid workspace_id"})
+		}
+	}
+
+	// Start transaction
+	tx, err := dbPool.Begin(c.Request().Context())
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, APIResponse{Success: false, Error: "Failed to start transaction"})
+	}
+	defer tx.Rollback(c.Request().Context())
+
+	qtx := queries.WithTx(tx)
+	idMap := make(map[string]pgtype.UUID)
+	createdTasks := make([]db.Task, 0, len(tasks))
+
+	for _, bt := range tasks {
+		prompt := bt.AgentPrompt
+		for k, v := range req.Variables {
+			prompt = strings.ReplaceAll(prompt, fmt.Sprintf("{{%s}}", k), v)
+		}
+
+		var dependsOnTaskID pgtype.UUID
+		if bt.DependsOn != "" {
+			if uuid, ok := idMap[bt.DependsOn]; ok {
+				dependsOnTaskID = uuid
+			}
+		}
+
+		policy := bt.MissedTaskPolicy
+		if policy == "" {
+			policy = "run_immediately"
+		}
+
+		task, err := qtx.CreateTask(c.Request().Context(), db.CreateTaskParams{
+			UserID:              userID,
+			Name:                bt.Name,
+			TriggerType:         pgtype.Text{String: bt.TriggerType, Valid: true},
+			TriggerConfig:       bt.TriggerConfig,
+			AgentPrompt:         prompt,
+			WorkspaceID:         workspaceID,
+			TaskType:            pgtype.Text{String: bt.TaskType, Valid: bt.TaskType != ""},
+			NativeCode:          pgtype.Text{String: bt.NativeCode, Valid: bt.NativeCode != ""},
+			MissedTaskPolicy:    pgtype.Text{String: policy, Valid: true},
+			RequiresApproval:    pgtype.Bool{Bool: bt.RequiresApproval, Valid: true},
+			DependsOnTaskID:     dependsOnTaskID,
+			TriggerOnCompletion: pgtype.Bool{Bool: bt.TriggerOnCompletion, Valid: true},
+			BranchCondition:     bt.BranchCondition,
+			IsBundleRoot:        pgtype.Bool{Bool: bt.IsBundleRoot, Valid: true},
+			NextRun:             pgtype.Timestamptz{Time: time.Now(), Valid: true},
+		})
+		if err != nil {
+			log.Printf("Failed to create task in blueprint: %v", err)
+			return c.JSON(http.StatusInternalServerError, APIResponse{Success: false, Error: "Failed to deploy blueprint task"})
+		}
+
+		if bt.ID != "" {
+			idMap[bt.ID] = task.ID
+		}
+		createdTasks = append(createdTasks, task)
+	}
+
+	// Increment uses
+	_, _ = qtx.IncrementTemplateUses(c.Request().Context(), templateID)
+
+	if err := tx.Commit(c.Request().Context()); err != nil {
+		return c.JSON(http.StatusInternalServerError, APIResponse{Success: false, Error: "Failed to commit deployment"})
+	}
+
+	return c.JSON(http.StatusCreated, APIResponse{Success: true, Data: createdTasks})
 }
 
 func handleCreateTemplate(c echo.Context) error {

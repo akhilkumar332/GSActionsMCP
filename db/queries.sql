@@ -186,8 +186,11 @@ WHERE id = 1;
 UPDATE tasks
 SET agent_prompt = $1, 
     missed_task_policy = $2,
-    ui_coordinates = $3
-WHERE id = $4 AND user_id = $5
+    ui_coordinates = $3,
+    depends_on_task_id = $4,
+    trigger_on_completion = $5,
+    branch_condition = $6
+WHERE id = $7 AND user_id = $8
 RETURNING *;
 
 -- name: CreateWorkspace :one

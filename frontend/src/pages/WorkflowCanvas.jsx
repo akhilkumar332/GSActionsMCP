@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import ReactFlow, { 
   addEdge, 
   Background, 
@@ -10,88 +10,30 @@ import ReactFlow, {
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import DashboardLayout from '../components/DashboardLayout';
-import { motion } from 'framer-motion';
+import TaskWizard from '../components/TaskWizard';
+import { motion, AnimatePresence } from 'framer-motion';
 import axios from 'axios';
-import { Save, RefreshCw, Layers } from 'lucide-react';
+import { Save, RefreshCw, Layers, X } from 'lucide-react';
 
 const WorkflowCanvas = () => {
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [selectedTask, setSelectedTask] = useState(null);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [tasks, setTasks] = useState([]);
+  
+  const sseRef = useRef(null);
 
   const fetchTasks = useCallback(async () => {
     setLoading(true);
     try {
       const res = await axios.get('/api/tasks');
       if (res.data.success) {
-        const tasks = res.data.data || [];
-        
-        // Map tasks to nodes
-        const newNodes = tasks.map((task, index) => {
-          let position = { x: index * 250, y: 100 };
-          
-          if (task.ui_coordinates) {
-            try {
-              // Handle both base64 string (if Go returns []byte) and object (if already parsed)
-              if (typeof task.ui_coordinates === 'string') {
-                position = JSON.parse(atob(task.ui_coordinates));
-              } else {
-                position = task.ui_coordinates;
-              }
-            } catch (e) {
-              console.warn("Failed to parse coordinates for task", task.id, e);
-            }
-          }
-
-          return {
-            id: task.id,
-            position,
-            data: { 
-              label: (
-                <div className="flex flex-col items-center gap-1">
-                  <div className="text-[10px] font-black uppercase tracking-widest text-slate-500">{task.trigger_type}</div>
-                  <div className="font-bold text-white text-xs">{task.name}</div>
-                  <div className={`text-[8px] font-black uppercase px-2 py-0.5 rounded ${
-                    task.status === 'active' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-slate-500/20 text-slate-400'
-                  }`}>
-                    {task.status}
-                  </div>
-                </div>
-              )
-            },
-            style: {
-              background: 'rgba(15, 23, 42, 0.8)',
-              color: '#fff',
-              border: '1px solid rgba(255, 255, 255, 0.1)',
-              borderRadius: '1rem',
-              padding: '1rem',
-              width: 180,
-              backdropFilter: 'blur(12px)',
-            },
-          };
-        });
-
-        // Map dependencies to edges
-        const newEdges = tasks
-          .filter(task => task.depends_on_task_id)
-          .map(task => ({
-            id: `e-${task.depends_on_task_id}-${task.id}`,
-            source: task.depends_on_task_id,
-            target: task.id,
-            animated: task.trigger_on_completion,
-            label: task.trigger_on_completion ? 'triggers' : 'depends',
-            labelStyle: { fill: '#94a3b8', fontWeight: 700, fontSize: 8, textTransform: 'uppercase', letterSpacing: '0.1em' },
-            labelBgStyle: { fill: 'transparent' },
-            style: { stroke: task.trigger_on_completion ? '#f59e0b' : '#3b82f6' },
-            markerEnd: {
-              type: MarkerType.ArrowClosed,
-              color: task.trigger_on_completion ? '#f59e0b' : '#3b82f6',
-            },
-          }));
-
-        setNodes(newNodes);
-        setEdges(newEdges);
+        const tasksData = res.data.data || [];
+        setTasks(tasksData);
+        mapTasksToFlow(tasksData);
       }
     } catch (err) {
       console.error('Failed to fetch tasks', err);
@@ -100,17 +42,152 @@ const WorkflowCanvas = () => {
     }
   }, [setNodes, setEdges]);
 
+  const mapTasksToFlow = (tasksList) => {
+    // Map tasks to nodes
+    const newNodes = tasksList.map((task, index) => {
+      let position = { x: index * 250, y: 100 };
+      
+      if (task.ui_coordinates) {
+        try {
+          if (typeof task.ui_coordinates === 'string') {
+            position = JSON.parse(atob(task.ui_coordinates));
+          } else {
+            position = task.ui_coordinates;
+          }
+        } catch (e) {
+          console.warn("Failed to parse coordinates for task", task.id, e);
+        }
+      }
+
+      const isProcessing = task.status === 'processing';
+
+      return {
+        id: task.id,
+        position,
+        data: { 
+          task,
+          label: (
+            <div className={`flex flex-col items-center gap-1 transition-all duration-500 ${isProcessing ? 'scale-110' : ''}`}>
+              <div className="text-[10px] font-black uppercase tracking-widest text-slate-500">{task.trigger_type}</div>
+              <div className="font-bold text-white text-xs">{task.name}</div>
+              <div className={`text-[8px] font-black uppercase px-2 py-0.5 rounded ${
+                task.status === 'active' ? 'bg-emerald-500/20 text-emerald-400' : 
+                task.status === 'processing' ? 'bg-amber-500/20 text-amber-400 animate-pulse' :
+                'bg-slate-500/20 text-slate-400'
+              }`}>
+                {task.status}
+              </div>
+              {isProcessing && (
+                <div className="absolute -inset-4 bg-amber-500/10 rounded-[1.5rem] -z-10 animate-ping duration-[2000ms]" />
+              )}
+            </div>
+          )
+        },
+        style: {
+          background: isProcessing ? 'rgba(217, 119, 6, 0.15)' : 'rgba(15, 23, 42, 0.8)',
+          color: '#fff',
+          border: isProcessing ? '2px solid rgba(217, 119, 6, 0.5)' : '1px solid rgba(255, 255, 255, 0.1)',
+          borderRadius: '1rem',
+          padding: '1rem',
+          width: 180,
+          backdropFilter: 'blur(12px)',
+          boxShadow: isProcessing ? '0 0 20px rgba(217, 119, 6, 0.3)' : 'none',
+        },
+      };
+    });
+
+    // Map dependencies to edges
+    const newEdges = tasksList
+      .filter(task => task.depends_on_task_id)
+      .map(task => ({
+        id: `e-${task.depends_on_task_id}-${task.id}`,
+        source: task.depends_on_task_id,
+        target: task.id,
+        animated: task.trigger_on_completion || task.status === 'processing',
+        label: task.trigger_on_completion ? 'triggers' : 'depends',
+        labelStyle: { fill: '#94a3b8', fontWeight: 700, fontSize: 8, textTransform: 'uppercase', letterSpacing: '0.1em' },
+        labelBgStyle: { fill: 'transparent' },
+        style: { stroke: task.trigger_on_completion ? '#f59e0b' : '#3b82f6', strokeWidth: 2 },
+        markerEnd: {
+          type: MarkerType.ArrowClosed,
+          color: task.trigger_on_completion ? '#f59e0b' : '#3b82f6',
+        },
+      }));
+
+    setNodes(newNodes);
+    setEdges(newEdges);
+  };
+
   useEffect(() => {
-    // eslint-disable-next-line
     fetchTasks();
+
+    // SSE Setup
+    const setupSSE = () => {
+      if (sseRef.current) sseRef.current.close();
+      
+      const sse = new EventSource('/api/events');
+      sseRef.current = sse;
+
+      sse.onmessage = (e) => {
+        try {
+          const event = JSON.parse(e.data);
+          if (event.event_type === 'task_status_changed') {
+            const payload = JSON.parse(event.payload);
+            updateTaskStatusLocally(payload.task_id, payload.status);
+          }
+        } catch (err) {
+          console.error("Failed to parse SSE event", err);
+        }
+      };
+
+      sse.onerror = () => {
+        console.warn("SSE Connection lost. Reconnecting in 5s...");
+        sse.close();
+        setTimeout(setupSSE, 5000);
+      };
+    };
+
+    setupSSE();
+
+    return () => {
+      if (sseRef.current) sseRef.current.close();
+    };
   }, [fetchTasks]);
 
-  const onConnect = useCallback((params) => setEdges((eds) => addEdge(params, eds)), [setEdges]);
+  const updateTaskStatusLocally = (taskId, status) => {
+    setTasks(prev => {
+      const updated = prev.map(t => t.id === taskId ? { ...t, status } : t);
+      mapTasksToFlow(updated);
+      return updated;
+    });
+  };
+
+  const onConnect = useCallback(async (params) => {
+    const { source, target } = params;
+    try {
+      const res = await axios.post(`/api/tasks/${target}/link`, {
+        depends_on_task_id: source,
+        trigger_on_completion: true
+      });
+      if (res.data.success) {
+        setEdges((eds) => addEdge({ ...params, animated: true, style: { stroke: '#f59e0b' } }, eds));
+        // Refresh tasks to get updated dependency state
+        fetchTasks();
+      }
+    } catch (err) {
+      console.error("Failed to link tasks", err);
+      alert("Failed to link tasks: " + (err.response?.data?.error || err.message));
+    }
+  }, [setEdges, fetchTasks]);
+
+  const onNodeClick = useCallback((event, node) => {
+    setSelectedTask(node.data.task);
+    setIsSidebarOpen(true);
+  }, []);
 
   const saveLayout = async () => {
     setSaving(true);
     try {
-      // For each node, update its task's ui_coordinates
       const promises = nodes.map(node => {
         return axios.patch(`/api/tasks/${node.id}`, {
           ui_coordinates: node.position
@@ -160,8 +237,8 @@ const WorkflowCanvas = () => {
         </div>
       </header>
 
-      <div className="h-[calc(100vh-300px)] w-full bg-slate-900/50 backdrop-blur-xl border border-white/10 rounded-[2.5rem] overflow-hidden shadow-[0_40px_100px_rgba(0,0,0,0.5)]">
-        {loading ? (
+      <div className="relative h-[calc(100vh-300px)] w-full bg-slate-900/50 backdrop-blur-xl border border-white/10 rounded-[2.5rem] overflow-hidden shadow-[0_40px_100px_rgba(0,0,0,0.5)]">
+        {loading && nodes.length === 0 ? (
           <div className="h-full w-full flex items-center justify-center">
              <div className="flex flex-col items-center gap-4">
                 <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-accent-orange"></div>
@@ -182,6 +259,7 @@ const WorkflowCanvas = () => {
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
             onConnect={onConnect}
+            onNodeClick={onNodeClick}
             colorMode="dark"
             fitView
           >
@@ -198,6 +276,54 @@ const WorkflowCanvas = () => {
             <Background variant="dots" gap={12} size={1} color="rgba(255, 255, 255, 0.1)" />
           </ReactFlow>
         )}
+
+        {/* Sidebar for editing */}
+        <AnimatePresence>
+          {isSidebarOpen && (
+            <>
+              <motion.div 
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={() => setIsSidebarOpen(false)}
+                className="absolute inset-0 bg-black/40 backdrop-blur-sm z-40"
+              />
+              <motion.div 
+                initial={{ x: '100%' }}
+                animate={{ x: 0 }}
+                exit={{ x: '100%' }}
+                transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+                className="absolute right-0 top-0 h-full w-full max-w-md bg-zinc-900 border-l border-white/10 z-50 shadow-2xl flex flex-col"
+              >
+                <div className="p-6 border-b border-white/5 flex items-center justify-between">
+                  <div>
+                    <h3 className="text-lg font-black text-white uppercase tracking-tighter">Task Inspector</h3>
+                    <p className="text-[10px] text-slate-500 font-black uppercase tracking-widest">Configuration & Logic</p>
+                  </div>
+                  <button 
+                    onClick={() => setIsSidebarOpen(false)}
+                    className="p-2 hover:bg-white/5 rounded-xl text-slate-500 hover:text-white transition-colors"
+                  >
+                    <X size={20} />
+                  </button>
+                </div>
+                
+                <div className="flex-1 overflow-hidden relative">
+                   {/* TaskWizard is used as the editor inside the sidebar */}
+                   <TaskWizard 
+                      isOpen={isSidebarOpen} 
+                      onClose={() => setIsSidebarOpen(false)} 
+                      initialData={selectedTask}
+                      onTaskCreated={() => {
+                        fetchTasks();
+                        setIsSidebarOpen(false);
+                      }}
+                   />
+                </div>
+              </motion.div>
+            </>
+          )}
+        </AnimatePresence>
       </div>
     </DashboardLayout>
   );
