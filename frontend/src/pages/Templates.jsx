@@ -3,11 +3,14 @@ import DashboardLayout from '../components/DashboardLayout';
 import { Layout, Search, Download, Loader2, Sparkles, Plus } from 'lucide-react';
 import { motion } from 'framer-motion';
 import axios from 'axios';
+import TaskWizard from '../components/TaskWizard';
 
 const Templates = () => {
     const [templates, setTemplates] = useState([]);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
+    const [isWizardOpen, setIsWizardOpen] = useState(false);
+    const [selectedTemplate, setSelectedTemplate] = useState(null);
     
     const fetchTemplates = async (query = '') => {
         setLoading(true);
@@ -30,8 +33,24 @@ const Templates = () => {
         return () => clearTimeout(timer);
     }, [search]);
 
+    const handleUseBlueprint = (template) => {
+        setSelectedTemplate({
+            name: `${template.name} (Copy)`,
+            ...template.config
+        });
+        setIsWizardOpen(true);
+    };
+
     return (
         <DashboardLayout>
+            <TaskWizard 
+                isOpen={isWizardOpen} 
+                onClose={() => setIsWizardOpen(false)} 
+                onTaskCreated={() => {
+                    alert('Task created successfully from blueprint!');
+                }}
+                initialData={selectedTemplate}
+            />
             <header className="mb-12 flex flex-col md:flex-row md:items-end justify-between gap-6">
                 <div>
                     <motion.h1 
@@ -100,7 +119,10 @@ const Templates = () => {
                                 <div className="flex items-center gap-2 text-[10px] font-black text-slate-500 uppercase tracking-widest">
                                     <Download size={12} /> 1.2k Uses
                                 </div>
-                                <button className="bg-white text-black px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-accent-orange hover:text-white transition-all flex items-center gap-2 active:scale-95">
+                                <button 
+                                    onClick={() => handleUseBlueprint(t)}
+                                    className="bg-white text-black px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-accent-orange hover:text-white transition-all flex items-center gap-2 active:scale-95"
+                                >
                                     <Plus size={12} /> Use Blueprint
                                 </button>
                             </div>

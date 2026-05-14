@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import axios from 'axios';
 
-const TaskWizard = ({ isOpen, onClose, onTaskCreated }) => {
+const TaskWizard = ({ isOpen, onClose, onTaskCreated, initialData }) => {
   const [step, setStep] = useState(1);
   const [workspaces, setWorkspaces] = useState([]);
   const [loadingWorkspaces, setLoadingWorkspaces] = useState(false);
@@ -29,9 +29,18 @@ const TaskWizard = ({ isOpen, onClose, onTaskCreated }) => {
   useEffect(() => {
     if (isOpen) {
       fetchWorkspaces();
-      resetForm();
+      if (initialData) {
+        setFormData(prev => ({
+          ...prev,
+          ...initialData,
+          // Ensure nested objects are handled
+          trigger_config: initialData.trigger_config || prev.trigger_config
+        }));
+      } else {
+        resetForm();
+      }
     }
-  }, [isOpen]);
+  }, [isOpen, initialData]);
 
   const resetForm = () => {
     setStep(1);
