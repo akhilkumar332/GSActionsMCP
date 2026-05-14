@@ -119,7 +119,12 @@ VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 RETURNING *;
 
 -- name: ListUserTasks :many
-SELECT id, name, trigger_type, status, next_run, requires_approval, encrypted_secrets, last_approval_status, trigger_on_completion FROM tasks WHERE user_id = $1;
+SELECT 
+    t.*,
+    (SELECT COUNT(*) FROM task_versions tv WHERE tv.task_id = t.id) as version_count
+FROM tasks t
+WHERE t.user_id = $1
+ORDER BY t.created_at DESC;
 
 -- name: GetTaskByID :one
 SELECT * FROM tasks WHERE id = $1 AND user_id = $2;

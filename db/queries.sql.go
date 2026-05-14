@@ -1174,9 +1174,18 @@ const getUser = `-- name: GetUser :one
 SELECT id, email, api_key, role, tier, created_at FROM users WHERE id = $1
 `
 
-func (q *Queries) GetUser(ctx context.Context, id string) (User, error) {
+type GetUserRow struct {
+	ID        string
+	Email     pgtype.Text
+	ApiKey    string
+	Role      pgtype.Text
+	Tier      pgtype.Text
+	CreatedAt pgtype.Timestamptz
+}
+
+func (q *Queries) GetUser(ctx context.Context, id string) (GetUserRow, error) {
 	row := q.db.QueryRow(ctx, getUser, id)
-	var i User
+	var i GetUserRow
 	err := row.Scan(
 		&i.ID,
 		&i.Email,
@@ -1592,19 +1601,41 @@ func (q *Queries) ListUserSecrets(ctx context.Context, userID string) ([]ListUse
 }
 
 const listUserTasks = `-- name: ListUserTasks :many
-SELECT id, name, trigger_type, status, next_run, requires_approval, encrypted_secrets, last_approval_status, trigger_on_completion FROM tasks WHERE user_id = $1
+SELECT 
+    t.id, t.user_id, t.name, t.trigger_type, t.trigger_config, t.agent_prompt, t.status, t.locked_by, t.next_run, t.last_run, t.failure_count, t.missed_task_policy, t.depends_on_task_id, t.created_at, t.requires_approval, t.encrypted_secrets, t.last_approval_status, t.trigger_on_completion, t.task_type, t.native_code, t.workspace_id, t.max_retries, t.retry_count, t.backoff_strategy, t.ui_coordinates,
+    (SELECT COUNT(*) FROM task_versions tv WHERE tv.task_id = t.id) as version_count
+FROM tasks t
+WHERE t.user_id = $1
+ORDER BY t.created_at DESC
 `
 
 type ListUserTasksRow struct {
 	ID                  pgtype.UUID
+	UserID              string
 	Name                string
 	TriggerType         pgtype.Text
+	TriggerConfig       []byte
+	AgentPrompt         string
 	Status              pgtype.Text
+	LockedBy            pgtype.Text
 	NextRun             pgtype.Timestamptz
+	LastRun             pgtype.Timestamptz
+	FailureCount        pgtype.Int4
+	MissedTaskPolicy    pgtype.Text
+	DependsOnTaskID     pgtype.UUID
+	CreatedAt           pgtype.Timestamptz
 	RequiresApproval    pgtype.Bool
 	EncryptedSecrets    []byte
 	LastApprovalStatus  pgtype.Text
 	TriggerOnCompletion pgtype.Bool
+	TaskType            pgtype.Text
+	NativeCode          pgtype.Text
+	WorkspaceID         pgtype.UUID
+	MaxRetries          pgtype.Int4
+	RetryCount          pgtype.Int4
+	BackoffStrategy     pgtype.Text
+	UiCoordinates       []byte
+	VersionCount        int64
 }
 
 func (q *Queries) ListUserTasks(ctx context.Context, userID string) ([]ListUserTasksRow, error) {
@@ -1618,14 +1649,31 @@ func (q *Queries) ListUserTasks(ctx context.Context, userID string) ([]ListUserT
 		var i ListUserTasksRow
 		if err := rows.Scan(
 			&i.ID,
+			&i.UserID,
 			&i.Name,
 			&i.TriggerType,
+			&i.TriggerConfig,
+			&i.AgentPrompt,
 			&i.Status,
+			&i.LockedBy,
 			&i.NextRun,
+			&i.LastRun,
+			&i.FailureCount,
+			&i.MissedTaskPolicy,
+			&i.DependsOnTaskID,
+			&i.CreatedAt,
 			&i.RequiresApproval,
 			&i.EncryptedSecrets,
 			&i.LastApprovalStatus,
 			&i.TriggerOnCompletion,
+			&i.TaskType,
+			&i.NativeCode,
+			&i.WorkspaceID,
+			&i.MaxRetries,
+			&i.RetryCount,
+			&i.BackoffStrategy,
+			&i.UiCoordinates,
+			&i.VersionCount,
 		); err != nil {
 			return nil, err
 		}
@@ -1704,6 +1752,35 @@ func (q *Queries) ListWebhookDeliveries(ctx context.Context, arg ListWebhookDeli
 			&i.Success,
 			&i.ResponseBody,
 			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listWorkerHeartbeats = `-- name: ListWorkerHeartbeats :many
+SELECT worker_id, hostname, last_heartbeat, task_count FROM worker_heartbeats ORDER BY last_heartbeat DESC
+`
+
+func (q *Queries) ListWorkerHeartbeats(ctx context.Context) ([]WorkerHeartbeat, error) {
+	rows, err := q.db.Query(ctx, listWorkerHeartbeats)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []WorkerHeartbeat
+	for rows.Next() {
+		var i WorkerHeartbeat
+		if err := rows.Scan(
+			&i.WorkerID,
+			&i.Hostname,
+			&i.LastHeartbeat,
+			&i.TaskCount,
 		); err != nil {
 			return nil, err
 		}
@@ -2076,35 +2153,6 @@ type UpsertWorkerHeartbeatParams struct {
 func (q *Queries) UpsertWorkerHeartbeat(ctx context.Context, arg UpsertWorkerHeartbeatParams) error {
 	_, err := q.db.Exec(ctx, upsertWorkerHeartbeat, arg.WorkerID, arg.Hostname, arg.TaskCount)
 	return err
-}
-
-const listWorkerHeartbeats = `-- name: ListWorkerHeartbeats :many
-SELECT worker_id, hostname, last_heartbeat, task_count FROM worker_heartbeats ORDER BY last_heartbeat DESC
-`
-
-func (q *Queries) ListWorkerHeartbeats(ctx context.Context) ([]WorkerHeartbeat, error) {
-	rows, err := q.db.Query(ctx, listWorkerHeartbeats)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []WorkerHeartbeat
-	for rows.Next() {
-		var i WorkerHeartbeat
-		if err := rows.Scan(
-			&i.WorkerID,
-			&i.Hostname,
-			&i.LastHeartbeat,
-			&i.TaskCount,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
 }
 
 const upsertWorkspaceEnvVar = `-- name: UpsertWorkspaceEnvVar :one
