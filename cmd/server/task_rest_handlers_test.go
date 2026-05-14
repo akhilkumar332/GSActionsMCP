@@ -52,3 +52,42 @@ func TestApiCreateTaskHandler(t *testing.T) {
 		t.Errorf("expected success true, got false. Error: %s", resp.Error)
 	}
 }
+
+func TestApiUpdateTaskHandler(t *testing.T) {
+	e := echo.New()
+	
+	taskData := `{
+		"agent_prompt": "Updated Prompt",
+		"missed_task_policy": "retry",
+		"ui_coordinates": {"x": 100, "y": 200}
+	}`
+	
+	req := httptest.NewRequest(http.MethodPatch, "/api/tasks/550e8400-e29b-41d4-a716-446655440000", strings.NewReader(taskData))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.SetParamNames("id")
+	c.SetParamValues("550e8400-e29b-41d4-a716-446655440000")
+	
+	// Set user ID in context
+	c.Set(string(userIDKey), "user-123")
+
+	err := apiUpdateTaskHandler(c)
+	
+	if err != nil {
+		t.Fatalf("apiUpdateTaskHandler returned error: %v", err)
+	}
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected status 200, got %d", rec.Code)
+	}
+
+	var resp APIResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to unmarshal response: %v", err)
+	}
+
+	if !resp.Success {
+		t.Errorf("expected success true, got false. Error: %s", resp.Error)
+	}
+}

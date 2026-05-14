@@ -179,10 +179,13 @@ UPDATE seo_settings
 SET title = $1, description = $2, keywords = $3, og_image = $4, updated_at = NOW()
 WHERE id = 1;
 
--- name: UpdateTaskAgentPromptAndPolicy :exec
+-- name: UpdateTaskAgentPromptAndPolicy :one
 UPDATE tasks
-SET agent_prompt = $1, missed_task_policy = $2
-WHERE id = $3 AND user_id = $4;
+SET agent_prompt = $1, 
+    missed_task_policy = $2,
+    ui_coordinates = $3
+WHERE id = $4 AND user_id = $5
+RETURNING *;
 
 -- name: CreateWorkspace :one
 INSERT INTO workspaces (name, owner_id) VALUES ($1, $2) RETURNING *;

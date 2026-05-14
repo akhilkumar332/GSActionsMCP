@@ -160,8 +160,9 @@ func apiDeleteTaskHandler(c echo.Context) error {
 }
 
 type UpdateTaskRequest struct {
-	AgentPrompt      string `json:"agent_prompt"`
-	MissedTaskPolicy string `json:"missed_task_policy"`
+	AgentPrompt      string          `json:"agent_prompt"`
+	MissedTaskPolicy string          `json:"missed_task_policy"`
+	UICoordinates    json.RawMessage `json:"ui_coordinates"`
 }
 
 func apiUpdateTaskHandler(c echo.Context) error {
@@ -189,9 +190,10 @@ func apiUpdateTaskHandler(c echo.Context) error {
 		log.Printf("Warning: Failed to create task version snapshot for %s: %v", taskIDStr, err)
 	}
 
-	err = queries.UpdateTaskAgentPromptAndPolicy(c.Request().Context(), db.UpdateTaskAgentPromptAndPolicyParams{
+	_, err = queries.UpdateTaskAgentPromptAndPolicy(c.Request().Context(), db.UpdateTaskAgentPromptAndPolicyParams{
 		AgentPrompt:      req.AgentPrompt,
 		MissedTaskPolicy: pgtype.Text{String: req.MissedTaskPolicy, Valid: true},
+		UiCoordinates:    req.UICoordinates,
 		ID:               taskID,
 		UserID:           userID,
 	})

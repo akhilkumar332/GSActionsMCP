@@ -1953,27 +1953,60 @@ func (q *Queries) UpdateSEOSettings(ctx context.Context, arg UpdateSEOSettingsPa
 	return err
 }
 
-const updateTaskAgentPromptAndPolicy = `-- name: UpdateTaskAgentPromptAndPolicy :exec
+const updateTaskAgentPromptAndPolicy = `-- name: UpdateTaskAgentPromptAndPolicy :one
 UPDATE tasks
-SET agent_prompt = $1, missed_task_policy = $2
-WHERE id = $3 AND user_id = $4
+SET agent_prompt = $1, 
+    missed_task_policy = $2,
+    ui_coordinates = $3
+WHERE id = $4 AND user_id = $5
+RETURNING id, user_id, name, trigger_type, trigger_config, agent_prompt, status, locked_by, next_run, last_run, failure_count, missed_task_policy, depends_on_task_id, created_at, requires_approval, encrypted_secrets, last_approval_status, trigger_on_completion, task_type, native_code, workspace_id, max_retries, retry_count, backoff_strategy, ui_coordinates
 `
 
 type UpdateTaskAgentPromptAndPolicyParams struct {
 	AgentPrompt      string
 	MissedTaskPolicy pgtype.Text
+	UiCoordinates    []byte
 	ID               pgtype.UUID
 	UserID           string
 }
 
-func (q *Queries) UpdateTaskAgentPromptAndPolicy(ctx context.Context, arg UpdateTaskAgentPromptAndPolicyParams) error {
-	_, err := q.db.Exec(ctx, updateTaskAgentPromptAndPolicy,
+func (q *Queries) UpdateTaskAgentPromptAndPolicy(ctx context.Context, arg UpdateTaskAgentPromptAndPolicyParams) (Task, error) {
+	row := q.db.QueryRow(ctx, updateTaskAgentPromptAndPolicy,
 		arg.AgentPrompt,
 		arg.MissedTaskPolicy,
+		arg.UiCoordinates,
 		arg.ID,
 		arg.UserID,
 	)
-	return err
+	var i Task
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.Name,
+		&i.TriggerType,
+		&i.TriggerConfig,
+		&i.AgentPrompt,
+		&i.Status,
+		&i.LockedBy,
+		&i.NextRun,
+		&i.LastRun,
+		&i.FailureCount,
+		&i.MissedTaskPolicy,
+		&i.DependsOnTaskID,
+		&i.CreatedAt,
+		&i.RequiresApproval,
+		&i.EncryptedSecrets,
+		&i.LastApprovalStatus,
+		&i.TriggerOnCompletion,
+		&i.TaskType,
+		&i.NativeCode,
+		&i.WorkspaceID,
+		&i.MaxRetries,
+		&i.RetryCount,
+		&i.BackoffStrategy,
+		&i.UiCoordinates,
+	)
+	return i, err
 }
 
 const updateTaskApprovalStatus = `-- name: UpdateTaskApprovalStatus :exec
