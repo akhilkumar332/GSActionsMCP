@@ -37,7 +37,26 @@ const Templates = () => {
 
     const handleUseBlueprint = async (template) => {
         // config might be a string if not automatically parsed, but axios usually parses it
-        const config = typeof template.config === 'string' ? JSON.parse(template.config) : template.config;
+        let config = template.config;
+        if (typeof template.config === 'string') {
+            try {
+                config = JSON.parse(template.config);
+            } catch (e) {
+                if (e instanceof SyntaxError) {
+                    try {
+                        // Attempt to Base64 decode if direct JSON parsing fails
+                        config = JSON.parse(atob(template.config));
+                    } catch (e2) {
+                        console.error("Failed to parse template config as JSON or Base64 encoded JSON:", template.config, e2);
+                        // Optionally, handle the error further, e.g., by setting config to null or default
+                        config = null; 
+                    }
+                } else {
+                    console.error("Unexpected error parsing template config:", e);
+                    config = null;
+                }
+            }
+        }
 
         if (Array.isArray(config)) {
             // It's a multi-task blueprint bundle
