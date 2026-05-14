@@ -16,8 +16,8 @@ SELECT EXISTS(SELECT 1 FROM tasks WHERE id = $1 AND user_id = $2)
 `
 
 type CheckTaskOwnershipParams struct {
-	ID     pgtype.UUID
-	UserID string
+	ID     pgtype.UUID `json:"id"`
+	UserID string      `json:"user_id"`
 }
 
 func (q *Queries) CheckTaskOwnership(ctx context.Context, arg CheckTaskOwnershipParams) (bool, error) {
@@ -36,8 +36,8 @@ SELECT EXISTS (
 `
 
 type CheckWorkspaceAccessParams struct {
-	ID      pgtype.UUID
-	OwnerID string
+	ID      pgtype.UUID `json:"id"`
+	OwnerID string      `json:"owner_id"`
 }
 
 func (q *Queries) CheckWorkspaceAccess(ctx context.Context, arg CheckWorkspaceAccessParams) (bool, error) {
@@ -52,8 +52,8 @@ SELECT id, user_id, name, trigger_type, trigger_config, agent_prompt, status, lo
 `
 
 type ClaimDueTasksParams struct {
-	BatchSize int32
-	WorkerID  string
+	BatchSize int32  `json:"batch_size"`
+	WorkerID  string `json:"worker_id"`
 }
 
 func (q *Queries) ClaimDueTasks(ctx context.Context, arg ClaimDueTasksParams) ([]Task, error) {
@@ -107,9 +107,9 @@ SELECT fn_complete_task($1, $2, $3)
 `
 
 type CompleteTaskParams struct {
-	TaskID     pgtype.UUID
-	NewNextRun pgtype.Timestamptz
-	NewStatus  string
+	TaskID     pgtype.UUID        `json:"task_id"`
+	NewNextRun pgtype.Timestamptz `json:"new_next_run"`
+	NewStatus  string             `json:"new_status"`
 }
 
 func (q *Queries) CompleteTask(ctx context.Context, arg CompleteTaskParams) error {
@@ -134,11 +134,11 @@ VALUES ($1, $2, $3, $4, $5)
 `
 
 type CreateAuditLogParams struct {
-	UserID       pgtype.Text
-	Action       string
-	ResourceType string
-	ResourceID   pgtype.Text
-	Metadata     []byte
+	UserID       pgtype.Text `json:"user_id"`
+	Action       string      `json:"action"`
+	ResourceType string      `json:"resource_type"`
+	ResourceID   pgtype.Text `json:"resource_id"`
+	Metadata     []byte      `json:"metadata"`
 }
 
 func (q *Queries) CreateAuditLog(ctx context.Context, arg CreateAuditLogParams) error {
@@ -159,14 +159,14 @@ RETURNING id, task_id, execution_id, worker_id, step_name, start_time, end_time,
 `
 
 type CreateExecutionTraceParams struct {
-	TaskID       pgtype.UUID
-	ExecutionID  string
-	WorkerID     string
-	StepName     string
-	InputData    []byte
-	OutputData   []byte
-	IsError      pgtype.Bool
-	ErrorMessage pgtype.Text
+	TaskID       pgtype.UUID `json:"task_id"`
+	ExecutionID  string      `json:"execution_id"`
+	WorkerID     string      `json:"worker_id"`
+	StepName     string      `json:"step_name"`
+	InputData    []byte      `json:"input_data"`
+	OutputData   []byte      `json:"output_data"`
+	IsError      pgtype.Bool `json:"is_error"`
+	ErrorMessage pgtype.Text `json:"error_message"`
 }
 
 func (q *Queries) CreateExecutionTrace(ctx context.Context, arg CreateExecutionTraceParams) (ExecutionTrace, error) {
@@ -205,15 +205,15 @@ RETURNING id, created_at
 `
 
 type CreateOutboundWebhookParams struct {
-	UserID                 string
-	EndpointUrl            string
-	EventTypes             []byte
-	EncryptedSigningSecret []byte
+	UserID                 string `json:"user_id"`
+	EndpointUrl            string `json:"endpoint_url"`
+	EventTypes             []byte `json:"event_types"`
+	EncryptedSigningSecret []byte `json:"encrypted_signing_secret"`
 }
 
 type CreateOutboundWebhookRow struct {
-	ID        pgtype.UUID
-	CreatedAt pgtype.Timestamptz
+	ID        pgtype.UUID        `json:"id"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
 }
 
 func (q *Queries) CreateOutboundWebhook(ctx context.Context, arg CreateOutboundWebhookParams) (CreateOutboundWebhookRow, error) {
@@ -235,20 +235,20 @@ RETURNING id, user_id, name, trigger_type, trigger_config, agent_prompt, status,
 `
 
 type CreateTaskParams struct {
-	UserID              string
-	Name                string
-	TriggerType         pgtype.Text
-	TriggerConfig       []byte
-	AgentPrompt         string
-	MissedTaskPolicy    pgtype.Text
-	DependsOnTaskID     pgtype.UUID
-	NextRun             pgtype.Timestamptz
-	RequiresApproval    pgtype.Bool
-	EncryptedSecrets    []byte
-	TriggerOnCompletion pgtype.Bool
-	WorkspaceID         pgtype.UUID
-	TaskType            pgtype.Text
-	NativeCode          pgtype.Text
+	UserID              string             `json:"user_id"`
+	Name                string             `json:"name"`
+	TriggerType         pgtype.Text        `json:"trigger_type"`
+	TriggerConfig       []byte             `json:"trigger_config"`
+	AgentPrompt         string             `json:"agent_prompt"`
+	MissedTaskPolicy    pgtype.Text        `json:"missed_task_policy"`
+	DependsOnTaskID     pgtype.UUID        `json:"depends_on_task_id"`
+	NextRun             pgtype.Timestamptz `json:"next_run"`
+	RequiresApproval    pgtype.Bool        `json:"requires_approval"`
+	EncryptedSecrets    []byte             `json:"encrypted_secrets"`
+	TriggerOnCompletion pgtype.Bool        `json:"trigger_on_completion"`
+	WorkspaceID         pgtype.UUID        `json:"workspace_id"`
+	TaskType            pgtype.Text        `json:"task_type"`
+	NativeCode          pgtype.Text        `json:"native_code"`
 }
 
 func (q *Queries) CreateTask(ctx context.Context, arg CreateTaskParams) (Task, error) {
@@ -306,11 +306,11 @@ RETURNING id
 `
 
 type CreateTaskLogParams struct {
-	TaskID       pgtype.UUID
-	UserID       string
-	Status       string
-	ErrorMessage pgtype.Text
-	LlmResponse  pgtype.Text
+	TaskID       pgtype.UUID `json:"task_id"`
+	UserID       string      `json:"user_id"`
+	Status       string      `json:"status"`
+	ErrorMessage pgtype.Text `json:"error_message"`
+	LlmResponse  pgtype.Text `json:"llm_response"`
 }
 
 func (q *Queries) CreateTaskLog(ctx context.Context, arg CreateTaskLogParams) (pgtype.UUID, error) {
@@ -341,8 +341,8 @@ RETURNING id, task_id, name, trigger_type, trigger_config, agent_prompt, missed_
 `
 
 type CreateTaskVersionParams struct {
-	ID     pgtype.UUID
-	UserID string
+	ID     pgtype.UUID `json:"id"`
+	UserID string      `json:"user_id"`
 }
 
 func (q *Queries) CreateTaskVersion(ctx context.Context, arg CreateTaskVersionParams) (TaskVersion, error) {
@@ -367,15 +367,15 @@ func (q *Queries) CreateTaskVersion(ctx context.Context, arg CreateTaskVersionPa
 }
 
 const createTemplate = `-- name: CreateTemplate :one
-INSERT INTO templates (name, description, config, is_public, workspace_id) VALUES ($1, $2, $3, $4, $5) RETURNING id, name, description, config, is_public, workspace_id, created_at, price_id, is_premium, author_id
+INSERT INTO templates (name, description, config, is_public, workspace_id) VALUES ($1, $2, $3, $4, $5) RETURNING id, name, description, config, is_public, workspace_id, created_at, price_id, is_premium, author_id, uses_count
 `
 
 type CreateTemplateParams struct {
-	Name        string
-	Description pgtype.Text
-	Config      []byte
-	IsPublic    pgtype.Bool
-	WorkspaceID pgtype.UUID
+	Name        string      `json:"name"`
+	Description pgtype.Text `json:"description"`
+	Config      []byte      `json:"config"`
+	IsPublic    pgtype.Bool `json:"is_public"`
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
 }
 
 func (q *Queries) CreateTemplate(ctx context.Context, arg CreateTemplateParams) (Template, error) {
@@ -398,6 +398,7 @@ func (q *Queries) CreateTemplate(ctx context.Context, arg CreateTemplateParams) 
 		&i.PriceID,
 		&i.IsPremium,
 		&i.AuthorID,
+		&i.UsesCount,
 	)
 	return i, err
 }
@@ -407,8 +408,8 @@ INSERT INTO user_template_subscriptions (user_id, template_id) VALUES ($1, $2) O
 `
 
 type CreateTemplateSubscriptionParams struct {
-	UserID     string
-	TemplateID pgtype.UUID
+	UserID     string      `json:"user_id"`
+	TemplateID pgtype.UUID `json:"template_id"`
 }
 
 func (q *Queries) CreateTemplateSubscription(ctx context.Context, arg CreateTemplateSubscriptionParams) error {
@@ -423,18 +424,18 @@ RETURNING id, email, api_key, role, tier, created_at
 `
 
 type CreateUserParams struct {
-	Email        pgtype.Text
-	PasswordHash pgtype.Text
-	ApiKey       string
+	Email        pgtype.Text `json:"email"`
+	PasswordHash pgtype.Text `json:"password_hash"`
+	ApiKey       string      `json:"api_key"`
 }
 
 type CreateUserRow struct {
-	ID        string
-	Email     pgtype.Text
-	ApiKey    string
-	Role      pgtype.Text
-	Tier      pgtype.Text
-	CreatedAt pgtype.Timestamptz
+	ID        string             `json:"id"`
+	Email     pgtype.Text        `json:"email"`
+	ApiKey    string             `json:"api_key"`
+	Role      pgtype.Text        `json:"role"`
+	Tier      pgtype.Text        `json:"tier"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
 }
 
 func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (CreateUserRow, error) {
@@ -458,8 +459,8 @@ RETURNING id
 `
 
 type CreateWebSessionParams struct {
-	UserID    pgtype.Text
-	ExpiresAt pgtype.Timestamptz
+	UserID    pgtype.Text        `json:"user_id"`
+	ExpiresAt pgtype.Timestamptz `json:"expires_at"`
 }
 
 func (q *Queries) CreateWebSession(ctx context.Context, arg CreateWebSessionParams) (pgtype.UUID, error) {
@@ -475,12 +476,12 @@ VALUES ($1, $2, $3, $4, $5, $6)
 `
 
 type CreateWebhookDeliveryParams struct {
-	WebhookID    pgtype.UUID
-	UserID       string
-	EventType    string
-	StatusCode   pgtype.Int4
-	Success      bool
-	ResponseBody pgtype.Text
+	WebhookID    pgtype.UUID `json:"webhook_id"`
+	UserID       string      `json:"user_id"`
+	EventType    string      `json:"event_type"`
+	StatusCode   pgtype.Int4 `json:"status_code"`
+	Success      bool        `json:"success"`
+	ResponseBody pgtype.Text `json:"response_body"`
 }
 
 func (q *Queries) CreateWebhookDelivery(ctx context.Context, arg CreateWebhookDeliveryParams) error {
@@ -500,8 +501,8 @@ INSERT INTO webhook_triggers (task_id, token) VALUES ($1, $2) RETURNING id, task
 `
 
 type CreateWebhookTriggerParams struct {
-	TaskID pgtype.UUID
-	Token  string
+	TaskID pgtype.UUID `json:"task_id"`
+	Token  string      `json:"token"`
 }
 
 func (q *Queries) CreateWebhookTrigger(ctx context.Context, arg CreateWebhookTriggerParams) (WebhookTrigger, error) {
@@ -521,8 +522,8 @@ INSERT INTO workspaces (name, owner_id) VALUES ($1, $2) RETURNING id, name, owne
 `
 
 type CreateWorkspaceParams struct {
-	Name    string
-	OwnerID string
+	Name    string `json:"name"`
+	OwnerID string `json:"owner_id"`
 }
 
 func (q *Queries) CreateWorkspace(ctx context.Context, arg CreateWorkspaceParams) (Workspace, error) {
@@ -542,8 +543,8 @@ DELETE FROM outbound_webhooks WHERE id = $1 AND user_id = $2
 `
 
 type DeleteOutboundWebhookParams struct {
-	ID     pgtype.UUID
-	UserID string
+	ID     pgtype.UUID `json:"id"`
+	UserID string      `json:"user_id"`
 }
 
 func (q *Queries) DeleteOutboundWebhook(ctx context.Context, arg DeleteOutboundWebhookParams) error {
@@ -556,8 +557,8 @@ DELETE FROM tasks WHERE id = $1 AND user_id = $2
 `
 
 type DeleteTaskParams struct {
-	ID     pgtype.UUID
-	UserID string
+	ID     pgtype.UUID `json:"id"`
+	UserID string      `json:"user_id"`
 }
 
 func (q *Queries) DeleteTask(ctx context.Context, arg DeleteTaskParams) error {
@@ -570,8 +571,8 @@ DELETE FROM user_secrets WHERE user_id = $1 AND name = $2
 `
 
 type DeleteUserSecretParams struct {
-	UserID string
-	Name   string
+	UserID string `json:"user_id"`
+	Name   string `json:"name"`
 }
 
 func (q *Queries) DeleteUserSecret(ctx context.Context, arg DeleteUserSecretParams) error {
@@ -593,8 +594,8 @@ DELETE FROM workspace_env_vars WHERE workspace_id = $1 AND name = $2
 `
 
 type DeleteWorkspaceEnvVarParams struct {
-	WorkspaceID pgtype.UUID
-	Name        string
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
+	Name        string      `json:"name"`
 }
 
 func (q *Queries) DeleteWorkspaceEnvVar(ctx context.Context, arg DeleteWorkspaceEnvVarParams) error {
@@ -668,8 +669,8 @@ SELECT id, password_hash FROM users WHERE email = $1
 `
 
 type GetAuthInfoByEmailRow struct {
-	ID           string
-	PasswordHash pgtype.Text
+	ID           string      `json:"id"`
+	PasswordHash pgtype.Text `json:"password_hash"`
 }
 
 func (q *Queries) GetAuthInfoByEmail(ctx context.Context, email pgtype.Text) (GetAuthInfoByEmailRow, error) {
@@ -690,8 +691,8 @@ ORDER BY date ASC
 `
 
 type GetDailyExecutionTrendsRow struct {
-	Date  string
-	Count int32
+	Date  string `json:"date"`
+	Count int32  `json:"count"`
 }
 
 func (q *Queries) GetDailyExecutionTrends(ctx context.Context) ([]GetDailyExecutionTrendsRow, error) {
@@ -778,9 +779,9 @@ WHERE id = $1
 `
 
 type GetDispatchableTaskByIDParams struct {
-	ID       pgtype.UUID
-	UserID   string
-	LockedBy pgtype.Text
+	ID       pgtype.UUID `json:"id"`
+	UserID   string      `json:"user_id"`
+	LockedBy pgtype.Text `json:"locked_by"`
 }
 
 func (q *Queries) GetDispatchableTaskByID(ctx context.Context, arg GetDispatchableTaskByIDParams) (Task, error) {
@@ -842,8 +843,8 @@ LIMIT 1
 `
 
 type GetLatestTaskLogResponseParams struct {
-	TaskID pgtype.UUID
-	UserID string
+	TaskID pgtype.UUID `json:"task_id"`
+	UserID string      `json:"user_id"`
 }
 
 func (q *Queries) GetLatestTaskLogResponse(ctx context.Context, arg GetLatestTaskLogResponseParams) (pgtype.Text, error) {
@@ -895,12 +896,12 @@ SELECT
 `
 
 type GetSystemUsageMetricsRow struct {
-	UserCount    int64
-	TaskCount    int64
-	SuccessCount int64
-	FailureCount int64
-	MissedCount  int64
-	AuditCount   int64
+	UserCount    int64 `json:"user_count"`
+	TaskCount    int64 `json:"task_count"`
+	SuccessCount int64 `json:"success_count"`
+	FailureCount int64 `json:"failure_count"`
+	MissedCount  int64 `json:"missed_count"`
+	AuditCount   int64 `json:"audit_count"`
 }
 
 func (q *Queries) GetSystemUsageMetrics(ctx context.Context) (GetSystemUsageMetricsRow, error) {
@@ -922,8 +923,8 @@ SELECT id, user_id, name, trigger_type, trigger_config, agent_prompt, status, lo
 `
 
 type GetTaskByIDParams struct {
-	ID     pgtype.UUID
-	UserID string
+	ID     pgtype.UUID `json:"id"`
+	UserID string      `json:"user_id"`
 }
 
 func (q *Queries) GetTaskByID(ctx context.Context, arg GetTaskByIDParams) (Task, error) {
@@ -1006,15 +1007,15 @@ LIMIT 100
 `
 
 type GetTaskLogsRow struct {
-	ID            pgtype.UUID
-	TaskID        pgtype.UUID
-	UserID        string
-	ExecutionTime pgtype.Timestamptz
-	Status        string
-	LlmResponse   pgtype.Text
-	ErrorMessage  pgtype.Text
-	TaskName      string
-	UserEmail     pgtype.Text
+	ID            pgtype.UUID        `json:"id"`
+	TaskID        pgtype.UUID        `json:"task_id"`
+	UserID        string             `json:"user_id"`
+	ExecutionTime pgtype.Timestamptz `json:"execution_time"`
+	Status        string             `json:"status"`
+	LlmResponse   pgtype.Text        `json:"llm_response"`
+	ErrorMessage  pgtype.Text        `json:"error_message"`
+	TaskName      string             `json:"task_name"`
+	UserEmail     pgtype.Text        `json:"user_email"`
 }
 
 func (q *Queries) GetTaskLogs(ctx context.Context) ([]GetTaskLogsRow, error) {
@@ -1052,8 +1053,8 @@ SELECT id, task_id, name, trigger_type, trigger_config, agent_prompt, missed_tas
 `
 
 type GetTaskVersionByIDParams struct {
-	ID     pgtype.UUID
-	TaskID pgtype.UUID
+	ID     pgtype.UUID `json:"id"`
+	TaskID pgtype.UUID `json:"task_id"`
 }
 
 func (q *Queries) GetTaskVersionByID(ctx context.Context, arg GetTaskVersionByIDParams) (TaskVersion, error) {
@@ -1085,8 +1086,8 @@ WHERE t.id = $1
 `
 
 type GetTaskWorkspaceEnvVarsRow struct {
-	Name  string
-	Value string
+	Name  string `json:"name"`
+	Value string `json:"value"`
 }
 
 func (q *Queries) GetTaskWorkspaceEnvVars(ctx context.Context, id pgtype.UUID) ([]GetTaskWorkspaceEnvVarsRow, error) {
@@ -1110,7 +1111,7 @@ func (q *Queries) GetTaskWorkspaceEnvVars(ctx context.Context, id pgtype.UUID) (
 }
 
 const getTemplateByIDRaw = `-- name: GetTemplateByIDRaw :one
-SELECT id, name, description, config, is_public, workspace_id, created_at, price_id, is_premium, author_id FROM templates WHERE id = $1
+SELECT id, name, description, config, is_public, workspace_id, created_at, price_id, is_premium, author_id, uses_count FROM templates WHERE id = $1
 `
 
 func (q *Queries) GetTemplateByIDRaw(ctx context.Context, id pgtype.UUID) (Template, error) {
@@ -1127,34 +1128,36 @@ func (q *Queries) GetTemplateByIDRaw(ctx context.Context, id pgtype.UUID) (Templ
 		&i.PriceID,
 		&i.IsPremium,
 		&i.AuthorID,
+		&i.UsesCount,
 	)
 	return i, err
 }
 
 const getTemplateWithSubscription = `-- name: GetTemplateWithSubscription :one
-SELECT t.id, t.name, t.description, t.config, t.is_public, t.workspace_id, t.created_at, t.price_id, t.is_premium, t.author_id, s.subscribed_at IS NOT NULL as is_subscribed
+SELECT t.id, t.name, t.description, t.config, t.is_public, t.workspace_id, t.created_at, t.price_id, t.is_premium, t.author_id, t.uses_count, s.subscribed_at IS NOT NULL as is_subscribed
 FROM templates t
 LEFT JOIN user_template_subscriptions s ON t.id = s.template_id AND s.user_id = $1
 WHERE t.id = $2
 `
 
 type GetTemplateWithSubscriptionParams struct {
-	UserID string
-	ID     pgtype.UUID
+	UserID string      `json:"user_id"`
+	ID     pgtype.UUID `json:"id"`
 }
 
 type GetTemplateWithSubscriptionRow struct {
-	ID           pgtype.UUID
-	Name         string
-	Description  pgtype.Text
-	Config       []byte
-	IsPublic     pgtype.Bool
-	WorkspaceID  pgtype.UUID
-	CreatedAt    pgtype.Timestamptz
-	PriceID      pgtype.Text
-	IsPremium    pgtype.Bool
-	AuthorID     pgtype.Text
-	IsSubscribed interface{}
+	ID           pgtype.UUID        `json:"id"`
+	Name         string             `json:"name"`
+	Description  pgtype.Text        `json:"description"`
+	Config       []byte             `json:"config"`
+	IsPublic     pgtype.Bool        `json:"is_public"`
+	WorkspaceID  pgtype.UUID        `json:"workspace_id"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	PriceID      pgtype.Text        `json:"price_id"`
+	IsPremium    pgtype.Bool        `json:"is_premium"`
+	AuthorID     pgtype.Text        `json:"author_id"`
+	UsesCount    pgtype.Int4        `json:"uses_count"`
+	IsSubscribed interface{}        `json:"is_subscribed"`
 }
 
 func (q *Queries) GetTemplateWithSubscription(ctx context.Context, arg GetTemplateWithSubscriptionParams) (GetTemplateWithSubscriptionRow, error) {
@@ -1171,6 +1174,7 @@ func (q *Queries) GetTemplateWithSubscription(ctx context.Context, arg GetTempla
 		&i.PriceID,
 		&i.IsPremium,
 		&i.AuthorID,
+		&i.UsesCount,
 		&i.IsSubscribed,
 	)
 	return i, err
@@ -1181,12 +1185,12 @@ SELECT id, email, api_key, role, tier, created_at FROM users WHERE id = $1
 `
 
 type GetUserRow struct {
-	ID        string
-	Email     pgtype.Text
-	ApiKey    string
-	Role      pgtype.Text
-	Tier      pgtype.Text
-	CreatedAt pgtype.Timestamptz
+	ID        string             `json:"id"`
+	Email     pgtype.Text        `json:"email"`
+	ApiKey    string             `json:"api_key"`
+	Role      pgtype.Text        `json:"role"`
+	Tier      pgtype.Text        `json:"tier"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
 }
 
 func (q *Queries) GetUser(ctx context.Context, id string) (GetUserRow, error) {
@@ -1208,8 +1212,8 @@ SELECT id, tier FROM users WHERE api_key = $1
 `
 
 type GetUserByAPIKeyRow struct {
-	ID   string
-	Tier pgtype.Text
+	ID   string      `json:"id"`
+	Tier pgtype.Text `json:"tier"`
 }
 
 func (q *Queries) GetUserByAPIKey(ctx context.Context, apiKey string) (GetUserByAPIKeyRow, error) {
@@ -1227,17 +1231,17 @@ WHERE s.id = $1 AND s.expires_at > $2
 `
 
 type GetUserBySessionIDParams struct {
-	ID        pgtype.UUID
-	ExpiresAt pgtype.Timestamptz
+	ID        pgtype.UUID        `json:"id"`
+	ExpiresAt pgtype.Timestamptz `json:"expires_at"`
 }
 
 type GetUserBySessionIDRow struct {
-	ID        string
-	Email     pgtype.Text
-	ApiKey    string
-	Role      pgtype.Text
-	Tier      pgtype.Text
-	CreatedAt pgtype.Timestamptz
+	ID        string             `json:"id"`
+	Email     pgtype.Text        `json:"email"`
+	ApiKey    string             `json:"api_key"`
+	Role      pgtype.Text        `json:"role"`
+	Tier      pgtype.Text        `json:"tier"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
 }
 
 func (q *Queries) GetUserBySessionID(ctx context.Context, arg GetUserBySessionIDParams) (GetUserBySessionIDRow, error) {
@@ -1270,8 +1274,8 @@ SELECT encrypted_value FROM user_secrets WHERE user_id = $1 AND name = $2
 `
 
 type GetUserSecretParams struct {
-	UserID string
-	Name   string
+	UserID string `json:"user_id"`
+	Name   string `json:"name"`
 }
 
 func (q *Queries) GetUserSecret(ctx context.Context, arg GetUserSecretParams) ([]byte, error) {
@@ -1319,8 +1323,8 @@ RETURNING failure_count
 `
 
 type IncrementTaskFailureCountParams struct {
-	ID     pgtype.UUID
-	UserID string
+	ID     pgtype.UUID `json:"id"`
+	UserID string      `json:"user_id"`
 }
 
 func (q *Queries) IncrementTaskFailureCount(ctx context.Context, arg IncrementTaskFailureCountParams) (pgtype.Int4, error) {
@@ -1337,10 +1341,10 @@ WHERE id = $3 AND user_id = $4
 `
 
 type LinkTaskDependencyParams struct {
-	DependsOnTaskID     pgtype.UUID
-	TriggerOnCompletion pgtype.Bool
-	ID                  pgtype.UUID
-	UserID              string
+	DependsOnTaskID     pgtype.UUID `json:"depends_on_task_id"`
+	TriggerOnCompletion pgtype.Bool `json:"trigger_on_completion"`
+	ID                  pgtype.UUID `json:"id"`
+	UserID              string      `json:"user_id"`
 }
 
 func (q *Queries) LinkTaskDependency(ctx context.Context, arg LinkTaskDependencyParams) error {
@@ -1360,10 +1364,10 @@ WHERE user_id = $1 AND is_active = TRUE
 `
 
 type ListActiveOutboundWebhooksRow struct {
-	ID                     pgtype.UUID
-	EndpointUrl            string
-	EventTypes             []byte
-	EncryptedSigningSecret []byte
+	ID                     pgtype.UUID `json:"id"`
+	EndpointUrl            string      `json:"endpoint_url"`
+	EventTypes             []byte      `json:"event_types"`
+	EncryptedSigningSecret []byte      `json:"encrypted_signing_secret"`
 }
 
 func (q *Queries) ListActiveOutboundWebhooks(ctx context.Context, userID string) ([]ListActiveOutboundWebhooksRow, error) {
@@ -1433,11 +1437,11 @@ WHERE user_id = $1
 `
 
 type ListOutboundWebhooksRow struct {
-	ID          pgtype.UUID
-	EndpointUrl string
-	EventTypes  []byte
-	IsActive    bool
-	CreatedAt   pgtype.Timestamptz
+	ID          pgtype.UUID        `json:"id"`
+	EndpointUrl string             `json:"endpoint_url"`
+	EventTypes  []byte             `json:"event_types"`
+	IsActive    bool               `json:"is_active"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 }
 
 func (q *Queries) ListOutboundWebhooks(ctx context.Context, userID string) ([]ListOutboundWebhooksRow, error) {
@@ -1467,7 +1471,7 @@ func (q *Queries) ListOutboundWebhooks(ctx context.Context, userID string) ([]Li
 }
 
 const listPublicTemplates = `-- name: ListPublicTemplates :many
-SELECT id, name, description, config, is_public, workspace_id, created_at, price_id, is_premium, author_id FROM templates 
+SELECT id, name, description, config, is_public, workspace_id, created_at, price_id, is_premium, author_id, uses_count FROM templates 
 WHERE is_public = true AND (name ILIKE $1 OR description ILIKE $1)
 ORDER BY created_at DESC
 `
@@ -1492,6 +1496,7 @@ func (q *Queries) ListPublicTemplates(ctx context.Context, name string) ([]Templ
 			&i.PriceID,
 			&i.IsPremium,
 			&i.AuthorID,
+			&i.UsesCount,
 		); err != nil {
 			return nil, err
 		}
@@ -1583,9 +1588,9 @@ SELECT id, name, created_at FROM user_secrets WHERE user_id = $1 ORDER BY name A
 `
 
 type ListUserSecretsRow struct {
-	ID        pgtype.UUID
-	Name      string
-	CreatedAt pgtype.Timestamptz
+	ID        pgtype.UUID        `json:"id"`
+	Name      string             `json:"name"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
 }
 
 func (q *Queries) ListUserSecrets(ctx context.Context, userID string) ([]ListUserSecretsRow, error) {
@@ -1618,32 +1623,32 @@ ORDER BY t.created_at DESC
 `
 
 type ListUserTasksRow struct {
-	ID                  pgtype.UUID
-	UserID              string
-	Name                string
-	TriggerType         pgtype.Text
-	TriggerConfig       []byte
-	AgentPrompt         string
-	Status              pgtype.Text
-	LockedBy            pgtype.Text
-	NextRun             pgtype.Timestamptz
-	LastRun             pgtype.Timestamptz
-	FailureCount        pgtype.Int4
-	MissedTaskPolicy    pgtype.Text
-	DependsOnTaskID     pgtype.UUID
-	CreatedAt           pgtype.Timestamptz
-	RequiresApproval    pgtype.Bool
-	EncryptedSecrets    []byte
-	LastApprovalStatus  pgtype.Text
-	TriggerOnCompletion pgtype.Bool
-	TaskType            pgtype.Text
-	NativeCode          pgtype.Text
-	WorkspaceID         pgtype.UUID
-	MaxRetries          pgtype.Int4
-	RetryCount          pgtype.Int4
-	BackoffStrategy     pgtype.Text
-	UiCoordinates       []byte
-	VersionCount        int64
+	ID                  pgtype.UUID        `json:"id"`
+	UserID              string             `json:"user_id"`
+	Name                string             `json:"name"`
+	TriggerType         pgtype.Text        `json:"trigger_type"`
+	TriggerConfig       []byte             `json:"trigger_config"`
+	AgentPrompt         string             `json:"agent_prompt"`
+	Status              pgtype.Text        `json:"status"`
+	LockedBy            pgtype.Text        `json:"locked_by"`
+	NextRun             pgtype.Timestamptz `json:"next_run"`
+	LastRun             pgtype.Timestamptz `json:"last_run"`
+	FailureCount        pgtype.Int4        `json:"failure_count"`
+	MissedTaskPolicy    pgtype.Text        `json:"missed_task_policy"`
+	DependsOnTaskID     pgtype.UUID        `json:"depends_on_task_id"`
+	CreatedAt           pgtype.Timestamptz `json:"created_at"`
+	RequiresApproval    pgtype.Bool        `json:"requires_approval"`
+	EncryptedSecrets    []byte             `json:"encrypted_secrets"`
+	LastApprovalStatus  pgtype.Text        `json:"last_approval_status"`
+	TriggerOnCompletion pgtype.Bool        `json:"trigger_on_completion"`
+	TaskType            pgtype.Text        `json:"task_type"`
+	NativeCode          pgtype.Text        `json:"native_code"`
+	WorkspaceID         pgtype.UUID        `json:"workspace_id"`
+	MaxRetries          pgtype.Int4        `json:"max_retries"`
+	RetryCount          pgtype.Int4        `json:"retry_count"`
+	BackoffStrategy     pgtype.Text        `json:"backoff_strategy"`
+	UiCoordinates       []byte             `json:"ui_coordinates"`
+	VersionCount        int64              `json:"version_count"`
 }
 
 func (q *Queries) ListUserTasks(ctx context.Context, userID string) ([]ListUserTasksRow, error) {
@@ -1701,12 +1706,12 @@ ORDER BY created_at DESC
 `
 
 type ListUsersRow struct {
-	ID        string
-	Email     pgtype.Text
-	ApiKey    string
-	Role      pgtype.Text
-	Tier      pgtype.Text
-	CreatedAt pgtype.Timestamptz
+	ID        string             `json:"id"`
+	Email     pgtype.Text        `json:"email"`
+	ApiKey    string             `json:"api_key"`
+	Role      pgtype.Text        `json:"role"`
+	Tier      pgtype.Text        `json:"tier"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
 }
 
 func (q *Queries) ListUsers(ctx context.Context, email pgtype.Text) ([]ListUsersRow, error) {
@@ -1741,8 +1746,8 @@ SELECT id, webhook_id, user_id, event_type, status_code, success, response_body,
 `
 
 type ListWebhookDeliveriesParams struct {
-	WebhookID pgtype.UUID
-	UserID    string
+	WebhookID pgtype.UUID `json:"webhook_id"`
+	UserID    string      `json:"user_id"`
 }
 
 func (q *Queries) ListWebhookDeliveries(ctx context.Context, arg ListWebhookDeliveriesParams) ([]WebhookDelivery, error) {
@@ -1839,8 +1844,8 @@ INSERT INTO dlq_tasks (task_id, error_message) VALUES ($1, $2) RETURNING id, tas
 `
 
 type MoveToDLQParams struct {
-	TaskID       pgtype.UUID
-	ErrorMessage pgtype.Text
+	TaskID       pgtype.UUID `json:"task_id"`
+	ErrorMessage pgtype.Text `json:"error_message"`
 }
 
 func (q *Queries) MoveToDLQ(ctx context.Context, arg MoveToDLQParams) (DlqTask, error) {
@@ -1874,9 +1879,9 @@ UPDATE tasks SET status = $1, failure_count = 0 WHERE id = $2 AND user_id = $3
 `
 
 type ResetTaskFailureCountParams struct {
-	Status pgtype.Text
-	ID     pgtype.UUID
-	UserID string
+	Status pgtype.Text `json:"status"`
+	ID     pgtype.UUID `json:"id"`
+	UserID string      `json:"user_id"`
 }
 
 func (q *Queries) ResetTaskFailureCount(ctx context.Context, arg ResetTaskFailureCountParams) error {
@@ -1902,9 +1907,9 @@ WHERE tasks.id = $1 AND tasks.user_id = $2 AND v.id = $3 AND v.task_id = $1
 `
 
 type RestoreTaskFromVersionParams struct {
-	ID     pgtype.UUID
-	UserID string
-	ID_2   pgtype.UUID
+	ID     pgtype.UUID `json:"id"`
+	UserID string      `json:"user_id"`
+	ID_2   pgtype.UUID `json:"id_2"`
 }
 
 func (q *Queries) RestoreTaskFromVersion(ctx context.Context, arg RestoreTaskFromVersionParams) error {
@@ -1926,8 +1931,8 @@ UPDATE users SET role = $1 WHERE email = $2
 `
 
 type SetUserRoleByEmailParams struct {
-	Role  pgtype.Text
-	Email pgtype.Text
+	Role  pgtype.Text `json:"role"`
+	Email pgtype.Text `json:"email"`
 }
 
 func (q *Queries) SetUserRoleByEmail(ctx context.Context, arg SetUserRoleByEmailParams) error {
@@ -1942,10 +1947,10 @@ WHERE id = 1
 `
 
 type UpdateSEOSettingsParams struct {
-	Title       string
-	Description string
-	Keywords    string
-	OgImage     pgtype.Text
+	Title       string      `json:"title"`
+	Description string      `json:"description"`
+	Keywords    string      `json:"keywords"`
+	OgImage     pgtype.Text `json:"og_image"`
 }
 
 func (q *Queries) UpdateSEOSettings(ctx context.Context, arg UpdateSEOSettingsParams) error {
@@ -1968,11 +1973,11 @@ RETURNING id, user_id, name, trigger_type, trigger_config, agent_prompt, status,
 `
 
 type UpdateTaskAgentPromptAndPolicyParams struct {
-	AgentPrompt      string
-	MissedTaskPolicy pgtype.Text
-	UiCoordinates    []byte
-	ID               pgtype.UUID
-	UserID           string
+	AgentPrompt      string      `json:"agent_prompt"`
+	MissedTaskPolicy pgtype.Text `json:"missed_task_policy"`
+	UiCoordinates    []byte      `json:"ui_coordinates"`
+	ID               pgtype.UUID `json:"id"`
+	UserID           string      `json:"user_id"`
 }
 
 func (q *Queries) UpdateTaskAgentPromptAndPolicy(ctx context.Context, arg UpdateTaskAgentPromptAndPolicyParams) (Task, error) {
@@ -2019,10 +2024,10 @@ UPDATE tasks SET last_approval_status = $1, status = $2, locked_by = NULL WHERE 
 `
 
 type UpdateTaskApprovalStatusParams struct {
-	LastApprovalStatus pgtype.Text
-	Status             pgtype.Text
-	ID                 pgtype.UUID
-	UserID             string
+	LastApprovalStatus pgtype.Text `json:"last_approval_status"`
+	Status             pgtype.Text `json:"status"`
+	ID                 pgtype.UUID `json:"id"`
+	UserID             string      `json:"user_id"`
 }
 
 func (q *Queries) UpdateTaskApprovalStatus(ctx context.Context, arg UpdateTaskApprovalStatusParams) error {
@@ -2040,9 +2045,9 @@ UPDATE tasks SET status = $1, locked_by = NULL, next_run = $2 WHERE id = $3
 `
 
 type UpdateTaskNextRunParams struct {
-	Status  pgtype.Text
-	NextRun pgtype.Timestamptz
-	ID      pgtype.UUID
+	Status  pgtype.Text        `json:"status"`
+	NextRun pgtype.Timestamptz `json:"next_run"`
+	ID      pgtype.UUID        `json:"id"`
 }
 
 func (q *Queries) UpdateTaskNextRun(ctx context.Context, arg UpdateTaskNextRunParams) error {
@@ -2055,9 +2060,9 @@ UPDATE tasks SET retry_count = $1 WHERE id = $2 AND user_id = $3
 `
 
 type UpdateTaskRetryCountParams struct {
-	RetryCount pgtype.Int4
-	ID         pgtype.UUID
-	UserID     string
+	RetryCount pgtype.Int4 `json:"retry_count"`
+	ID         pgtype.UUID `json:"id"`
+	UserID     string      `json:"user_id"`
 }
 
 func (q *Queries) UpdateTaskRetryCount(ctx context.Context, arg UpdateTaskRetryCountParams) error {
@@ -2070,9 +2075,9 @@ UPDATE tasks SET status = $1, locked_by = NULL WHERE id = $2 AND user_id = $3
 `
 
 type UpdateTaskStatusParams struct {
-	Status pgtype.Text
-	ID     pgtype.UUID
-	UserID string
+	Status pgtype.Text `json:"status"`
+	ID     pgtype.UUID `json:"id"`
+	UserID string      `json:"user_id"`
 }
 
 func (q *Queries) UpdateTaskStatus(ctx context.Context, arg UpdateTaskStatusParams) error {
@@ -2085,11 +2090,11 @@ UPDATE tasks SET status = $1, locked_by = NULL, failure_count = $2, retry_count 
 `
 
 type UpdateTaskStatusAndFailureCountParams struct {
-	Status       pgtype.Text
-	FailureCount pgtype.Int4
-	RetryCount   pgtype.Int4
-	ID           pgtype.UUID
-	UserID       string
+	Status       pgtype.Text `json:"status"`
+	FailureCount pgtype.Int4 `json:"failure_count"`
+	RetryCount   pgtype.Int4 `json:"retry_count"`
+	ID           pgtype.UUID `json:"id"`
+	UserID       string      `json:"user_id"`
 }
 
 func (q *Queries) UpdateTaskStatusAndFailureCount(ctx context.Context, arg UpdateTaskStatusAndFailureCountParams) error {
@@ -2108,9 +2113,9 @@ UPDATE tasks SET status = $1, locked_by = NULL WHERE id = $2 AND user_id = $3
 `
 
 type UpdateTaskStatusByUserIDParams struct {
-	Status pgtype.Text
-	ID     pgtype.UUID
-	UserID string
+	Status pgtype.Text `json:"status"`
+	ID     pgtype.UUID `json:"id"`
+	UserID string      `json:"user_id"`
 }
 
 func (q *Queries) UpdateTaskStatusByUserID(ctx context.Context, arg UpdateTaskStatusByUserIDParams) error {
@@ -2123,8 +2128,8 @@ UPDATE users SET api_key = $1 WHERE id = $2
 `
 
 type UpdateUserAPIKeyParams struct {
-	ApiKey string
-	ID     string
+	ApiKey string `json:"api_key"`
+	ID     string `json:"id"`
 }
 
 func (q *Queries) UpdateUserAPIKey(ctx context.Context, arg UpdateUserAPIKeyParams) error {
@@ -2137,8 +2142,8 @@ UPDATE users SET role = $1 WHERE id = $2
 `
 
 type UpdateUserRoleParams struct {
-	Role pgtype.Text
-	ID   string
+	Role pgtype.Text `json:"role"`
+	ID   string      `json:"id"`
 }
 
 func (q *Queries) UpdateUserRole(ctx context.Context, arg UpdateUserRoleParams) error {
@@ -2151,8 +2156,8 @@ UPDATE users SET tier = $1 WHERE id = $2
 `
 
 type UpdateUserTierParams struct {
-	Tier pgtype.Text
-	ID   string
+	Tier pgtype.Text `json:"tier"`
+	ID   string      `json:"id"`
 }
 
 func (q *Queries) UpdateUserTier(ctx context.Context, arg UpdateUserTierParams) error {
@@ -2168,9 +2173,9 @@ RETURNING id
 `
 
 type UpsertUserSecretParams struct {
-	UserID         string
-	Name           string
-	EncryptedValue []byte
+	UserID         string `json:"user_id"`
+	Name           string `json:"name"`
+	EncryptedValue []byte `json:"encrypted_value"`
 }
 
 func (q *Queries) UpsertUserSecret(ctx context.Context, arg UpsertUserSecretParams) (pgtype.UUID, error) {
@@ -2189,9 +2194,9 @@ ON CONFLICT (worker_id) DO UPDATE SET
 `
 
 type UpsertWorkerHeartbeatParams struct {
-	WorkerID  string
-	Hostname  pgtype.Text
-	TaskCount pgtype.Int4
+	WorkerID  string      `json:"worker_id"`
+	Hostname  pgtype.Text `json:"hostname"`
+	TaskCount pgtype.Int4 `json:"task_count"`
 }
 
 func (q *Queries) UpsertWorkerHeartbeat(ctx context.Context, arg UpsertWorkerHeartbeatParams) error {
@@ -2209,9 +2214,9 @@ RETURNING id, workspace_id, name, value, created_at, updated_at
 `
 
 type UpsertWorkspaceEnvVarParams struct {
-	WorkspaceID pgtype.UUID
-	Name        string
-	Value       string
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
+	Name        string      `json:"name"`
+	Value       string      `json:"value"`
 }
 
 func (q *Queries) UpsertWorkspaceEnvVar(ctx context.Context, arg UpsertWorkspaceEnvVarParams) (WorkspaceEnvVar, error) {

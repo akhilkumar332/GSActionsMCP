@@ -35,6 +35,7 @@ const Templates = () => {
 
     const handleUseBlueprint = (template) => {
         setSelectedTemplate({
+            id: template.id,
             name: `${template.name} (Copy)`,
             ...template.config
         });
@@ -46,7 +47,15 @@ const Templates = () => {
             <TaskWizard 
                 isOpen={isWizardOpen} 
                 onClose={() => setIsWizardOpen(false)} 
-                onTaskCreated={() => {
+                onTaskCreated={async () => {
+                    if (selectedTemplate && selectedTemplate.id) {
+                        try {
+                            await axios.post(`/api/v1/templates/${selectedTemplate.id}/increment-uses`);
+                            fetchTemplates(search);
+                        } catch (err) {
+                            console.error('Failed to increment uses', err);
+                        }
+                    }
                     alert('Task created successfully from blueprint!');
                 }}
                 initialData={selectedTemplate}
@@ -117,7 +126,7 @@ const Templates = () => {
                             </p>
                             <div className="flex items-center justify-between pt-6 border-t border-white/5">
                                 <div className="flex items-center gap-2 text-[10px] font-black text-slate-500 uppercase tracking-widest">
-                                    <Download size={12} /> 1.2k Uses
+                                    <Download size={12} /> {t.uses_count || 0} Uses
                                 </div>
                                 <button 
                                     onClick={() => handleUseBlueprint(t)}

@@ -257,6 +257,7 @@ func main() {
 	v1.DELETE("/workspaces/:id/env/:name", handleDeleteWorkspaceEnvVar, EchoSessionMiddleware)
 	v1.GET("/templates", handleListPublicTemplates, EchoSessionMiddleware)
 	v1.POST("/templates", handleCreateTemplate, EchoSessionMiddleware)
+	v1.POST("/templates/:id/increment-uses", handleIncrementTemplateUses, EchoSessionMiddleware)
 
 	// Task routes for frontend TaskWizard
 	v1.GET("/tasks", apiListTasksHandler, csrfMiddleware, EchoSessionMiddleware)

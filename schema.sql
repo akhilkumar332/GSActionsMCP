@@ -210,7 +210,8 @@ CREATE TABLE templates (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     price_id TEXT, -- Stripe Price ID
     is_premium BOOLEAN DEFAULT false,
-    author_id TEXT REFERENCES users(id)
+    author_id TEXT REFERENCES users(id),
+    uses_count INT DEFAULT 0
 );
 
 CREATE TABLE user_template_subscriptions (

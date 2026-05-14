@@ -9,197 +9,198 @@ import (
 )
 
 type AuditLog struct {
-	ID           pgtype.UUID
-	UserID       pgtype.Text
-	Action       string
-	ResourceType string
-	ResourceID   pgtype.Text
-	Metadata     []byte
-	CreatedAt    pgtype.Timestamptz
+	ID           pgtype.UUID        `json:"id"`
+	UserID       pgtype.Text        `json:"user_id"`
+	Action       string             `json:"action"`
+	ResourceType string             `json:"resource_type"`
+	ResourceID   pgtype.Text        `json:"resource_id"`
+	Metadata     []byte             `json:"metadata"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
 }
 
 type DlqTask struct {
-	ID           pgtype.UUID
-	TaskID       pgtype.UUID
-	ErrorMessage pgtype.Text
-	FailedAt     pgtype.Timestamptz
+	ID           pgtype.UUID        `json:"id"`
+	TaskID       pgtype.UUID        `json:"task_id"`
+	ErrorMessage pgtype.Text        `json:"error_message"`
+	FailedAt     pgtype.Timestamptz `json:"failed_at"`
 }
 
 type ExecutionTrace struct {
-	ID           pgtype.UUID
-	TaskID       pgtype.UUID
-	ExecutionID  string
-	WorkerID     string
-	StepName     string
-	StartTime    pgtype.Timestamptz
-	EndTime      pgtype.Timestamptz
-	DurationMs   pgtype.Int4
-	InputData    []byte
-	OutputData   []byte
-	IsError      pgtype.Bool
-	ErrorMessage pgtype.Text
+	ID           pgtype.UUID        `json:"id"`
+	TaskID       pgtype.UUID        `json:"task_id"`
+	ExecutionID  string             `json:"execution_id"`
+	WorkerID     string             `json:"worker_id"`
+	StepName     string             `json:"step_name"`
+	StartTime    pgtype.Timestamptz `json:"start_time"`
+	EndTime      pgtype.Timestamptz `json:"end_time"`
+	DurationMs   pgtype.Int4        `json:"duration_ms"`
+	InputData    []byte             `json:"input_data"`
+	OutputData   []byte             `json:"output_data"`
+	IsError      pgtype.Bool        `json:"is_error"`
+	ErrorMessage pgtype.Text        `json:"error_message"`
 }
 
 type OutboundWebhook struct {
-	ID                     pgtype.UUID
-	UserID                 string
-	EndpointUrl            string
-	EventTypes             []byte
-	EncryptedSigningSecret []byte
-	IsActive               bool
-	CreatedAt              pgtype.Timestamptz
+	ID                     pgtype.UUID        `json:"id"`
+	UserID                 string             `json:"user_id"`
+	EndpointUrl            string             `json:"endpoint_url"`
+	EventTypes             []byte             `json:"event_types"`
+	EncryptedSigningSecret []byte             `json:"encrypted_signing_secret"`
+	IsActive               bool               `json:"is_active"`
+	CreatedAt              pgtype.Timestamptz `json:"created_at"`
 }
 
 type SeoSetting struct {
-	ID          int32
-	Title       string
-	Description string
-	Keywords    string
-	OgImage     pgtype.Text
-	UpdatedAt   pgtype.Timestamptz
+	ID          int32              `json:"id"`
+	Title       string             `json:"title"`
+	Description string             `json:"description"`
+	Keywords    string             `json:"keywords"`
+	OgImage     pgtype.Text        `json:"og_image"`
+	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
 }
 
 type Task struct {
-	ID                  pgtype.UUID
-	UserID              string
-	Name                string
-	TriggerType         pgtype.Text
-	TriggerConfig       []byte
-	AgentPrompt         string
-	Status              pgtype.Text
-	LockedBy            pgtype.Text
-	NextRun             pgtype.Timestamptz
-	LastRun             pgtype.Timestamptz
-	FailureCount        pgtype.Int4
-	MissedTaskPolicy    pgtype.Text
-	DependsOnTaskID     pgtype.UUID
-	CreatedAt           pgtype.Timestamptz
-	RequiresApproval    pgtype.Bool
-	EncryptedSecrets    []byte
-	LastApprovalStatus  pgtype.Text
-	TriggerOnCompletion pgtype.Bool
-	TaskType            pgtype.Text
-	NativeCode          pgtype.Text
-	WorkspaceID         pgtype.UUID
-	MaxRetries          pgtype.Int4
-	RetryCount          pgtype.Int4
-	BackoffStrategy     pgtype.Text
-	UiCoordinates       []byte
+	ID                  pgtype.UUID        `json:"id"`
+	UserID              string             `json:"user_id"`
+	Name                string             `json:"name"`
+	TriggerType         pgtype.Text        `json:"trigger_type"`
+	TriggerConfig       []byte             `json:"trigger_config"`
+	AgentPrompt         string             `json:"agent_prompt"`
+	Status              pgtype.Text        `json:"status"`
+	LockedBy            pgtype.Text        `json:"locked_by"`
+	NextRun             pgtype.Timestamptz `json:"next_run"`
+	LastRun             pgtype.Timestamptz `json:"last_run"`
+	FailureCount        pgtype.Int4        `json:"failure_count"`
+	MissedTaskPolicy    pgtype.Text        `json:"missed_task_policy"`
+	DependsOnTaskID     pgtype.UUID        `json:"depends_on_task_id"`
+	CreatedAt           pgtype.Timestamptz `json:"created_at"`
+	RequiresApproval    pgtype.Bool        `json:"requires_approval"`
+	EncryptedSecrets    []byte             `json:"encrypted_secrets"`
+	LastApprovalStatus  pgtype.Text        `json:"last_approval_status"`
+	TriggerOnCompletion pgtype.Bool        `json:"trigger_on_completion"`
+	TaskType            pgtype.Text        `json:"task_type"`
+	NativeCode          pgtype.Text        `json:"native_code"`
+	WorkspaceID         pgtype.UUID        `json:"workspace_id"`
+	MaxRetries          pgtype.Int4        `json:"max_retries"`
+	RetryCount          pgtype.Int4        `json:"retry_count"`
+	BackoffStrategy     pgtype.Text        `json:"backoff_strategy"`
+	UiCoordinates       []byte             `json:"ui_coordinates"`
 }
 
 type TaskLog struct {
-	ID            pgtype.UUID
-	TaskID        pgtype.UUID
-	UserID        string
-	ExecutionTime pgtype.Timestamptz
-	Status        string
-	LlmResponse   pgtype.Text
-	ErrorMessage  pgtype.Text
+	ID            pgtype.UUID        `json:"id"`
+	TaskID        pgtype.UUID        `json:"task_id"`
+	UserID        string             `json:"user_id"`
+	ExecutionTime pgtype.Timestamptz `json:"execution_time"`
+	Status        string             `json:"status"`
+	LlmResponse   pgtype.Text        `json:"llm_response"`
+	ErrorMessage  pgtype.Text        `json:"error_message"`
 }
 
 type TaskVersion struct {
-	ID                  pgtype.UUID
-	TaskID              pgtype.UUID
-	Name                string
-	TriggerType         string
-	TriggerConfig       []byte
-	AgentPrompt         string
-	MissedTaskPolicy    string
-	DependsOnTaskID     pgtype.UUID
-	RequiresApproval    bool
-	TriggerOnCompletion bool
-	TaskType            string
-	NativeCode          pgtype.Text
-	CreatedAt           pgtype.Timestamptz
+	ID                  pgtype.UUID        `json:"id"`
+	TaskID              pgtype.UUID        `json:"task_id"`
+	Name                string             `json:"name"`
+	TriggerType         string             `json:"trigger_type"`
+	TriggerConfig       []byte             `json:"trigger_config"`
+	AgentPrompt         string             `json:"agent_prompt"`
+	MissedTaskPolicy    string             `json:"missed_task_policy"`
+	DependsOnTaskID     pgtype.UUID        `json:"depends_on_task_id"`
+	RequiresApproval    bool               `json:"requires_approval"`
+	TriggerOnCompletion bool               `json:"trigger_on_completion"`
+	TaskType            string             `json:"task_type"`
+	NativeCode          pgtype.Text        `json:"native_code"`
+	CreatedAt           pgtype.Timestamptz `json:"created_at"`
 }
 
 type Template struct {
-	ID          pgtype.UUID
-	Name        string
-	Description pgtype.Text
-	Config      []byte
-	IsPublic    pgtype.Bool
-	WorkspaceID pgtype.UUID
-	CreatedAt   pgtype.Timestamptz
-	PriceID     pgtype.Text
-	IsPremium   pgtype.Bool
-	AuthorID    pgtype.Text
+	ID          pgtype.UUID        `json:"id"`
+	Name        string             `json:"name"`
+	Description pgtype.Text        `json:"description"`
+	Config      []byte             `json:"config"`
+	IsPublic    pgtype.Bool        `json:"is_public"`
+	WorkspaceID pgtype.UUID        `json:"workspace_id"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	PriceID     pgtype.Text        `json:"price_id"`
+	IsPremium   pgtype.Bool        `json:"is_premium"`
+	AuthorID    pgtype.Text        `json:"author_id"`
+	UsesCount   pgtype.Int4        `json:"uses_count"`
 }
 
 type User struct {
-	ID           string
-	ApiKey       string
-	Email        pgtype.Text
-	PasswordHash pgtype.Text
-	Role         pgtype.Text
-	LastLogin    pgtype.Timestamptz
-	Tier         pgtype.Text
-	CreatedAt    pgtype.Timestamptz
+	ID           string             `json:"id"`
+	ApiKey       string             `json:"api_key"`
+	Email        pgtype.Text        `json:"email"`
+	PasswordHash pgtype.Text        `json:"password_hash"`
+	Role         pgtype.Text        `json:"role"`
+	LastLogin    pgtype.Timestamptz `json:"last_login"`
+	Tier         pgtype.Text        `json:"tier"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
 }
 
 type UserSecret struct {
-	ID             pgtype.UUID
-	UserID         string
-	Name           string
-	EncryptedValue []byte
-	CreatedAt      pgtype.Timestamptz
+	ID             pgtype.UUID        `json:"id"`
+	UserID         string             `json:"user_id"`
+	Name           string             `json:"name"`
+	EncryptedValue []byte             `json:"encrypted_value"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
 }
 
 type UserTemplateSubscription struct {
-	UserID       string
-	TemplateID   pgtype.UUID
-	SubscribedAt pgtype.Timestamptz
+	UserID       string             `json:"user_id"`
+	TemplateID   pgtype.UUID        `json:"template_id"`
+	SubscribedAt pgtype.Timestamptz `json:"subscribed_at"`
 }
 
 type WebSession struct {
-	ID        pgtype.UUID
-	UserID    pgtype.Text
-	ExpiresAt pgtype.Timestamptz
+	ID        pgtype.UUID        `json:"id"`
+	UserID    pgtype.Text        `json:"user_id"`
+	ExpiresAt pgtype.Timestamptz `json:"expires_at"`
 }
 
 type WebhookDelivery struct {
-	ID           pgtype.UUID
-	WebhookID    pgtype.UUID
-	UserID       string
-	EventType    string
-	StatusCode   pgtype.Int4
-	Success      bool
-	ResponseBody pgtype.Text
-	CreatedAt    pgtype.Timestamptz
+	ID           pgtype.UUID        `json:"id"`
+	WebhookID    pgtype.UUID        `json:"webhook_id"`
+	UserID       string             `json:"user_id"`
+	EventType    string             `json:"event_type"`
+	StatusCode   pgtype.Int4        `json:"status_code"`
+	Success      bool               `json:"success"`
+	ResponseBody pgtype.Text        `json:"response_body"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
 }
 
 type WebhookTrigger struct {
-	ID        pgtype.UUID
-	TaskID    pgtype.UUID
-	Token     string
-	CreatedAt pgtype.Timestamptz
+	ID        pgtype.UUID        `json:"id"`
+	TaskID    pgtype.UUID        `json:"task_id"`
+	Token     string             `json:"token"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
 }
 
 type WorkerHeartbeat struct {
-	WorkerID      string
-	Hostname      pgtype.Text
-	LastHeartbeat pgtype.Timestamptz
-	TaskCount     pgtype.Int4
+	WorkerID      string             `json:"worker_id"`
+	Hostname      pgtype.Text        `json:"hostname"`
+	LastHeartbeat pgtype.Timestamptz `json:"last_heartbeat"`
+	TaskCount     pgtype.Int4        `json:"task_count"`
 }
 
 type Workspace struct {
-	ID        pgtype.UUID
-	Name      string
-	OwnerID   string
-	CreatedAt pgtype.Timestamptz
+	ID        pgtype.UUID        `json:"id"`
+	Name      string             `json:"name"`
+	OwnerID   string             `json:"owner_id"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
 }
 
 type WorkspaceEnvVar struct {
-	ID          pgtype.UUID
-	WorkspaceID pgtype.UUID
-	Name        string
-	Value       string
-	CreatedAt   pgtype.Timestamptz
-	UpdatedAt   pgtype.Timestamptz
+	ID          pgtype.UUID        `json:"id"`
+	WorkspaceID pgtype.UUID        `json:"workspace_id"`
+	Name        string             `json:"name"`
+	Value       string             `json:"value"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
 }
 
 type WorkspaceMember struct {
-	WorkspaceID pgtype.UUID
-	UserID      string
-	Role        pgtype.Text
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
+	UserID      string      `json:"user_id"`
+	Role        pgtype.Text `json:"role"`
 }

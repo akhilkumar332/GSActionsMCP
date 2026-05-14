@@ -1,0 +1,1 @@
+ALTER TABLE templates ADD COLUMN uses_count INT DEFAULT 0;

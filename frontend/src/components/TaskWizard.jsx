@@ -209,7 +209,7 @@ const TaskWizard = ({ isOpen, onClose, onTaskCreated, initialData }) => {
                             </div>
                             <div>
                               <div className="text-sm font-bold text-white uppercase tracking-tight">{w.name}</div>
-                              <div className="text-[10px] text-slate-500 font-mono">ID: {w.id.substring(0, 8)}...</div>
+                              <div className="text-[10px] text-slate-500 font-mono">ID: {w.id ? w.id.substring(0, 8) : 'N/A'}...</div>
                             </div>
                           </div>
                           {formData.workspace_id === w.id && <Check size={20} className="text-accent-orange" />}
