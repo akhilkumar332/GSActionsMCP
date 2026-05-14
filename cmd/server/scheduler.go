@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"regexp"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -400,9 +401,11 @@ func handleClaimedTask(workerCtx context.Context, t db.Task) {
 		InputData:   []byte(t.AgentPrompt),
 	})
 
+	resolvedPrompt := resolvePromptVariables(workerCtx, t.UserID, t.AgentPrompt)
+
 	payloadBytes, _ := json.Marshal(map[string]interface{}{
 		"task_id":        taskID,
-		"prompt":         t.AgentPrompt,
+		"prompt":         resolvedPrompt,
 		"execution_id":   executionID,
 		"trigger_type":   t.TriggerType.String,
 		"trigger_config": string(t.TriggerConfig),
@@ -542,6 +545,29 @@ func handleClaimedTask(workerCtx context.Context, t db.Task) {
 	}
 
 	log.Printf("Task %s delivered to node. Remaining in 'processing' status.", taskID)
+}
+
+func resolvePromptVariables(ctx context.Context, userID string, prompt string) string {
+	re := regexp.MustCompile(`\{\{task\.([0-9a-fA-F-]{36})\.output\}\}`)
+	return re.ReplaceAllStringFunc(prompt, func(match string) string {
+		submatch := re.FindStringSubmatch(match)
+		if len(submatch) < 2 {
+			return match
+		}
+		taskIDStr := submatch[1]
+		var tid pgtype.UUID
+		if err := parseUUID(taskIDStr, &tid); err != nil {
+			return match
+		}
+
+		// Ensure ownership and fetch output
+		output, err := queries.GetTaskOutput(ctx, tid)
+		if err != nil {
+			log.Printf("Error fetching output for task %s: %v", taskIDStr, err)
+			return match
+		}
+		return string(output)
+	})
 }
 
 // completeTask calls the PLpgSQL function to set the task back to active and update next_run
