@@ -21,6 +21,20 @@ services:
     ports:
       - "6379:6379"
 
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    environment:
+      - COLLECTOR_ZIPKIN_HOST_PORT=:9411
+    ports:
+      - "5775:5775/udp"
+      - "6831:6831/udp"
+      - "6832:6832/udp"
+      - "5778:5778"
+      - "16686:16686"
+      - "14268:14268"
+      - "14250:14250"
+      - "9411:9411"
+
   mcp-server:
     build: .
     ports:
@@ -28,6 +42,7 @@ services:
     environment:
       - DATABASE_URL=postgres://postgres:password@db:5432/mcp?sslmode=disable
       - REDIS_URL=redis://redis:6379/0
+      - OTLP_ENDPOINT=jaeger:4317
       - PORT=8080
       - ENV=development
       - LOCAL_DEV=true
@@ -42,6 +57,8 @@ services:
       db:
         condition: service_healthy
       redis:
+        condition: service_started
+      jaeger:
         condition: service_started
 
 volumes:

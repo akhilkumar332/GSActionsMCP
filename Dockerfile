@@ -27,6 +27,8 @@ COPY migrations/ ./migrations/
 # Copy static files if they are still used (though mostly for favicon/legacy)
 COPY static/ ./static/
 
+RUN echo "JAEGER DASHBOARD: http://localhost:16686"
+
 # Environment variables
 ENV PORT=8080
 ENV ENV=production
