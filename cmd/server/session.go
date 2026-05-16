@@ -35,9 +35,13 @@ func (sm *SessionManager) AddUser(ctx context.Context, userID string) {
 	if sm.redisClient == nil {
 		return
 	}
+	ctx, span := otel.Tracer("session").Start(ctx, "AddUser")
+	defer span.End()
+
 	err := sm.redisClient.Set(ctx, fmt.Sprintf("session:%s", userID), "active", 30*time.Second).Err()
 	if err != nil {
 		log.Printf("Failed to set session for user %s: %v", userID, err)
+		span.RecordError(err)
 	}
 }
 
@@ -46,6 +50,9 @@ func (sm *SessionManager) RemoveUser(ctx context.Context, userID string) {
 	if sm.redisClient == nil {
 		return
 	}
+	ctx, span := otel.Tracer("session").Start(ctx, "RemoveUser")
+	defer span.End()
+
 	sm.redisClient.Del(ctx, fmt.Sprintf("session:%s", userID))
 }
 
@@ -54,11 +61,15 @@ func (sm *SessionManager) IsOnline(ctx context.Context, userID string) bool {
 	if sm.redisClient == nil {
 		return false
 	}
+	ctx, span := otel.Tracer("session").Start(ctx, "IsOnline")
+	defer span.End()
+
 	val, err := sm.redisClient.Get(ctx, fmt.Sprintf("session:%s", userID)).Result()
 	if err == redis.Nil {
 		return false
 	} else if err != nil {
 		log.Printf("Failed to check session for user %s: %v", userID, err)
+		span.RecordError(err)
 		return false
 	}
 	return val == "active"

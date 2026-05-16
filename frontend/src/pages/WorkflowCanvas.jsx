@@ -560,7 +560,7 @@ const WorkflowCanvas = () => {
                                <input 
                                  type="range" 
                                  min="0" 
-                                 max={traces.length - 1} 
+                                 max={Math.max(0, traces.length - 1)} 
                                  value={currentTraceIndex}
                                  onChange={(e) => setCurrentTraceIndex(parseInt(e.target.value))}
                                  className="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-accent-orange"

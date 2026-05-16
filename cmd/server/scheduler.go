@@ -630,7 +630,7 @@ func resolvePromptVariables(ctx context.Context, userID string, prompt string, t
 }
 
 func evaluateWorkflowLoop(loopConfig []byte, state map[string]interface{}) bool {
-	if len(loopConfig) == 0 {
+	if len(loopConfig) == 0 || state == nil {
 		return false
 	}
 	var loopCond map[string]interface{}
