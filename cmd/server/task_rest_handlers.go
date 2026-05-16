@@ -2,10 +2,12 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"log"
 	"net/http"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/labstack/echo/v4"
 	"schedule-mcp/db"
@@ -267,6 +269,10 @@ func apiUpdateTaskHandler(c echo.Context) error {
 		UserID:              userID,
 	})
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return c.JSON(http.StatusNotFound, APIResponse{Success: false, Error: "Task not found"})
+		}
+		log.Printf("Failed to update task: %v", err)
 		return c.JSON(http.StatusInternalServerError, APIResponse{Success: false, Error: "Failed to update task"})
 	}
 
