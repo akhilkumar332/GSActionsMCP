@@ -14,7 +14,7 @@ const Tasks = () => {
 
   const fetchTasks = useCallback(async () => {
     try {
-      const res = await axios.get('/api/tasks');
+      const res = await axios.get('/api/v1/tasks');
       if (res.data.success) {
         setTasks(res.data.data || []);
       }
@@ -37,9 +37,9 @@ const Tasks = () => {
     
     try {
       if (action === 'delete') {
-        await axios.delete(`/api/tasks/${taskId}`);
+        await axios.delete(`/api/v1/tasks/${taskId}`);
       } else {
-        await axios.post(`/api/tasks/${taskId}/${action}`);
+        await axios.post(`/api/v1/tasks/${taskId}/${action}`);
       }
       fetchTasks();
     } catch {

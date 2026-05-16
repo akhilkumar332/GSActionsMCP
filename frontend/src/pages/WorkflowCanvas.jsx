@@ -13,7 +13,7 @@ import DashboardLayout from '../components/DashboardLayout';
 import TaskWizard from '../components/TaskWizard';
 import { motion, AnimatePresence } from 'framer-motion';
 import axios from 'axios';
-import { Save, RefreshCw, Layers, X } from 'lucide-react';
+import { Save, RefreshCw, Layers, X, Trash2 } from 'lucide-react';
 
 const WorkflowCanvas = () => {
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
@@ -103,7 +103,7 @@ const WorkflowCanvas = () => {
 
   const fetchTasks = useCallback(async () => {
     try {
-      const res = await axios.get('/api/tasks');
+      const res = await axios.get('/api/v1/tasks');
       if (res.data.success) {
         const tasksData = res.data.data || [];
         mapTasksToFlow(tasksData);
@@ -171,7 +171,7 @@ const WorkflowCanvas = () => {
     const setupSSE = () => {
       if (sseRef.current) sseRef.current.close();
       
-      const sse = new EventSource('/api/events');
+      const sse = new EventSource('/api/v1/events');
       sseRef.current = sse;
 
       sse.onmessage = (e) => {
@@ -203,7 +203,7 @@ const WorkflowCanvas = () => {
   const onConnect = useCallback(async (params) => {
     const { source, target } = params;
     try {
-      const res = await axios.post(`/api/tasks/${target}/link`, {
+      const res = await axios.post(`/api/v1/tasks/${target}/link`, {
         depends_on_task_id: source,
         trigger_on_completion: true
       });
@@ -218,16 +218,56 @@ const WorkflowCanvas = () => {
     }
   }, [setEdges, fetchTasks]);
 
+  const onNodesDelete = useCallback(async (deletedNodes) => {
+    for (const node of deletedNodes) {
+      try {
+        await axios.delete(`/api/v1/tasks/${node.id}`);
+      } catch (err) {
+        console.error(`Failed to delete task ${node.id}`, err);
+      }
+    }
+    fetchTasks();
+  }, [fetchTasks]);
+
+  const onEdgesDelete = useCallback(async (deletedEdges) => {
+    for (const edge of deletedEdges) {
+      try {
+        // Remove dependency by setting depends_on_task_id to null
+        await axios.post(`/api/v1/tasks/${edge.target}/link`, {
+          depends_on_task_id: null
+        });
+      } catch (err) {
+        console.error(`Failed to remove dependency for task ${edge.target}`, err);
+      }
+    }
+    fetchTasks();
+  }, [fetchTasks]);
+
   const onNodeClick = useCallback((event, node) => {
     setSelectedTask(node.data.task);
     setIsSidebarOpen(true);
   }, []);
 
+  const handleDeleteTask = useCallback(async (taskId) => {
+    if (!window.confirm('Are you sure you want to delete this task?')) return;
+    
+    try {
+      const res = await axios.delete(`/api/v1/tasks/${taskId}`);
+      if (res.data.success) {
+        setIsSidebarOpen(false);
+        fetchTasks();
+      }
+    } catch (err) {
+      console.error("Failed to delete task", err);
+      alert("Failed to delete task: " + (err.response?.data?.error || err.message));
+    }
+  }, [fetchTasks]);
+
   const saveLayout = async () => {
     setSaving(true);
     try {
       const promises = nodes.map(node => {
-        return axios.patch(`/api/tasks/${node.id}`, {
+        return axios.patch(`/api/v1/tasks/${node.id}`, {
           ui_coordinates: node.position
         });
       });
@@ -298,6 +338,8 @@ const WorkflowCanvas = () => {
             onEdgesChange={onEdgesChange}
             onConnect={onConnect}
             onNodeClick={onNodeClick}
+            onNodesDelete={onNodesDelete}
+            onEdgesDelete={onEdgesDelete}
             colorMode="dark"
             fitView
           >
@@ -338,12 +380,21 @@ const WorkflowCanvas = () => {
                     <h3 className="text-lg font-black text-white uppercase tracking-tighter">Task Inspector</h3>
                     <p className="text-[10px] text-slate-500 font-black uppercase tracking-widest">Configuration & Logic</p>
                   </div>
-                  <button 
-                    onClick={() => setIsSidebarOpen(false)}
-                    className="p-2 hover:bg-white/5 rounded-xl text-slate-500 hover:text-white transition-colors"
-                  >
-                    <X size={20} />
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button 
+                      onClick={() => handleDeleteTask(selectedTask.id)}
+                      className="p-2 hover:bg-red-500/10 rounded-xl text-red-500 transition-colors"
+                      title="Delete Task"
+                    >
+                      <Trash2 size={20} />
+                    </button>
+                    <button 
+                      onClick={() => setIsSidebarOpen(false)}
+                      className="p-2 hover:bg-white/5 rounded-xl text-slate-500 hover:text-white transition-colors"
+                    >
+                      <X size={20} />
+                    </button>
+                  </div>
                 </div>
                 
                 <div className="flex-1 overflow-hidden relative">

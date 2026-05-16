@@ -17,7 +17,7 @@ const Dashboard = () => {
 
   const fetchData = useCallback(async () => {
     try {
-      const res = await axios.get('/api/dashboard');
+      const res = await axios.get('/api/v1/dashboard');
       if (res.data.success) {
         setTaskCount(res.data.data.taskCount);
       }
@@ -79,7 +79,7 @@ const Dashboard = () => {
 
   const handleApprove = async (taskId) => {
     try {
-      await axios.post(`/api/tasks/${taskId}/approve`);
+      await axios.post(`/api/v1/tasks/${taskId}/approve`);
       setPendingApprovals(prev => prev.filter(a => a.task_id !== taskId));
       addToast('Task approved and resumed');
       fetchData();
@@ -90,7 +90,7 @@ const Dashboard = () => {
 
   const handleDeny = async (taskId) => {
     try {
-      await axios.post(`/api/tasks/${taskId}/deny`);
+      await axios.post(`/api/v1/tasks/${taskId}/deny`);
       setPendingApprovals(prev => prev.filter(a => a.task_id !== taskId));
       addToast('Task execution denied');
       fetchData();
@@ -110,7 +110,7 @@ const Dashboard = () => {
     
     setRotating(true);
     try {
-      await axios.post('/api/rotate-api-key');
+      await axios.post('/api/v1/rotate-api-key');
       await checkAuth();
       alert('API Key rotated successfully');
     } catch {
@@ -122,7 +122,7 @@ const Dashboard = () => {
 
   const handleUpgrade = async () => {
     try {
-      const res = await axios.post('/api/billing/create-checkout-session');
+      const res = await axios.post('/api/v1/billing/create-checkout-session');
       if (res.data.success && res.data.data.url) {
         window.location.assign(res.data.data.url);
       }

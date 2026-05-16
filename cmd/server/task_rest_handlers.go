@@ -39,15 +39,19 @@ func apiCreateTaskHandler(c echo.Context) error {
 
 	var workspaceID pgtype.UUID
 	if req.WorkspaceID != "" {
-		if err := parseUUID(req.WorkspaceID, &workspaceID); err != nil {
-			return c.JSON(http.StatusBadRequest, APIResponse{Success: false, Error: "Invalid workspace ID"})
+		var err error
+		workspaceID, err = mustParseUUID(c, req.WorkspaceID)
+		if err != nil {
+			return err
 		}
 	}
 
 	var dependsOnTaskID pgtype.UUID
 	if req.DependsOnTaskID != "" {
-		if err := parseUUID(req.DependsOnTaskID, &dependsOnTaskID); err != nil {
-			return c.JSON(http.StatusBadRequest, APIResponse{Success: false, Error: "Invalid parent task ID"})
+		var err error
+		dependsOnTaskID, err = mustParseUUID(c, req.DependsOnTaskID)
+		if err != nil {
+			return err
 		}
 	}
 
@@ -80,6 +84,18 @@ func apiCreateTaskHandler(c echo.Context) error {
 		return c.JSON(http.StatusInternalServerError, APIResponse{Success: false, Error: "Failed to create task"})
 	}
 
+	// Audit Log
+	taskIDStr := formatUUID(task.ID)
+	writeAuditLog(c.Request().Context(), AuditEvent{
+		UserID:       userID,
+		Action:       "task.create",
+		ResourceType: "task",
+		ResourceID:   taskIDStr,
+		Metadata: map[string]interface{}{
+			"name": req.Name,
+		},
+	})
+
 	return c.JSON(http.StatusCreated, APIResponse{Success: true, Data: task})
 }
 
@@ -106,11 +122,9 @@ func apiPauseTaskHandler(c echo.Context) error {
 		return c.JSON(http.StatusUnauthorized, APIResponse{Success: false, Error: "Unauthorized"})
 	}
 	taskIDStr := c.Param("id")
-
-	var taskID pgtype.UUID
-	err := parseUUID(taskIDStr, &taskID)
+	taskID, err := mustParseUUID(c, taskIDStr)
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, APIResponse{Success: false, Error: "Invalid task ID"})
+		return err
 	}
 
 	err = queries.UpdateTaskStatusByUserID(c.Request().Context(), db.UpdateTaskStatusByUserIDParams{
@@ -122,6 +136,14 @@ func apiPauseTaskHandler(c echo.Context) error {
 		return c.JSON(http.StatusInternalServerError, APIResponse{Success: false, Error: "Failed to pause task"})
 	}
 
+	// Audit Log
+	writeAuditLog(c.Request().Context(), AuditEvent{
+		UserID:       userID,
+		Action:       "task.pause",
+		ResourceType: "task",
+		ResourceID:   taskIDStr,
+	})
+
 	return c.JSON(http.StatusOK, APIResponse{Success: true, Message: "Task paused"})
 }
 
@@ -131,10 +153,9 @@ func apiResumeTaskHandler(c echo.Context) error {
 		return c.JSON(http.StatusUnauthorized, APIResponse{Success: false, Error: "Unauthorized"})
 	}
 	taskIDStr := c.Param("id")
-	var taskID pgtype.UUID
-	err := parseUUID(taskIDStr, &taskID)
+	taskID, err := mustParseUUID(c, taskIDStr)
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, APIResponse{Success: false, Error: "Invalid task ID"})
+		return err
 	}
 
 	err = queries.UpdateTaskStatusByUserID(c.Request().Context(), db.UpdateTaskStatusByUserIDParams{
@@ -146,6 +167,14 @@ func apiResumeTaskHandler(c echo.Context) error {
 		return c.JSON(http.StatusInternalServerError, APIResponse{Success: false, Error: "Failed to resume task"})
 	}
 
+	// Audit Log
+	writeAuditLog(c.Request().Context(), AuditEvent{
+		UserID:       userID,
+		Action:       "task.resume",
+		ResourceType: "task",
+		ResourceID:   taskIDStr,
+	})
+
 	return c.JSON(http.StatusOK, APIResponse{Success: true, Message: "Task resumed"})
 }
 
@@ -155,10 +184,9 @@ func apiDeleteTaskHandler(c echo.Context) error {
 		return c.JSON(http.StatusUnauthorized, APIResponse{Success: false, Error: "Unauthorized"})
 	}
 	taskIDStr := c.Param("id")
-	var taskID pgtype.UUID
-	err := parseUUID(taskIDStr, &taskID)
+	taskID, err := mustParseUUID(c, taskIDStr)
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, APIResponse{Success: false, Error: "Invalid task ID"})
+		return err
 	}
 
 	err = queries.DeleteTask(c.Request().Context(), db.DeleteTaskParams{
@@ -168,6 +196,14 @@ func apiDeleteTaskHandler(c echo.Context) error {
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, APIResponse{Success: false, Error: "Failed to delete task"})
 	}
+
+	// Audit Log
+	writeAuditLog(c.Request().Context(), AuditEvent{
+		UserID:       userID,
+		Action:       "task.delete",
+		ResourceType: "task",
+		ResourceID:   taskIDStr,
+	})
 
 	return c.JSON(http.StatusOK, APIResponse{Success: true, Message: "Task deleted"})
 }
@@ -187,10 +223,9 @@ func apiUpdateTaskHandler(c echo.Context) error {
 		return c.JSON(http.StatusUnauthorized, APIResponse{Success: false, Error: "Unauthorized"})
 	}
 	taskIDStr := c.Param("id")
-	var taskID pgtype.UUID
-	err := parseUUID(taskIDStr, &taskID)
+	taskID, err := mustParseUUID(c, taskIDStr)
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, APIResponse{Success: false, Error: "Invalid task ID"})
+		return err
 	}
 
 	var req UpdateTaskRequest
@@ -208,8 +243,10 @@ func apiUpdateTaskHandler(c echo.Context) error {
 
 	var dependsOnTaskID pgtype.UUID
 	if req.DependsOnTaskID != "" {
-		if err := parseUUID(req.DependsOnTaskID, &dependsOnTaskID); err != nil {
-			return c.JSON(http.StatusBadRequest, APIResponse{Success: false, Error: "Invalid dependency task ID"})
+		var err error
+		dependsOnTaskID, err = mustParseUUID(c, req.DependsOnTaskID)
+		if err != nil {
+			return err
 		}
 	}
 
@@ -227,6 +264,14 @@ func apiUpdateTaskHandler(c echo.Context) error {
 		return c.JSON(http.StatusInternalServerError, APIResponse{Success: false, Error: "Failed to update task"})
 	}
 
+	// Audit Log
+	writeAuditLog(c.Request().Context(), AuditEvent{
+		UserID:       userID,
+		Action:       "task.update",
+		ResourceType: "task",
+		ResourceID:   taskIDStr,
+	})
+
 	return c.JSON(http.StatusOK, APIResponse{Success: true, Message: "Task updated"})
 }
 
@@ -236,9 +281,9 @@ func apiListTaskVersionsHandler(c echo.Context) error {
 		return c.JSON(http.StatusUnauthorized, APIResponse{Success: false, Error: "Unauthorized"})
 	}
 	taskIDStr := c.Param("id")
-	var taskID pgtype.UUID
-	if err := parseUUID(taskIDStr, &taskID); err != nil {
-		return c.JSON(http.StatusBadRequest, APIResponse{Success: false, Error: "Invalid task ID"})
+	taskID, err := mustParseUUID(c, taskIDStr)
+	if err != nil {
+		return err
 	}
 
 	// Check ownership first
@@ -266,12 +311,13 @@ func apiRestoreTaskVersionHandler(c echo.Context) error {
 	taskIDStr := c.Param("id")
 	versionIDStr := c.Param("version_id")
 
-	var taskID, versionID pgtype.UUID
-	if err := parseUUID(taskIDStr, &taskID); err != nil {
-		return c.JSON(http.StatusBadRequest, APIResponse{Success: false, Error: "Invalid task ID"})
+	taskID, err := mustParseUUID(c, taskIDStr)
+	if err != nil {
+		return err
 	}
-	if err := parseUUID(versionIDStr, &versionID); err != nil {
-		return c.JSON(http.StatusBadRequest, APIResponse{Success: false, Error: "Invalid version ID"})
+	versionID, err := mustParseUUID(c, versionIDStr)
+	if err != nil {
+		return err
 	}
 
 	// 1. Create a snapshot of CURRENT state before rolling back
@@ -283,7 +329,7 @@ func apiRestoreTaskVersionHandler(c echo.Context) error {
 	}
 
 	// 2. Restore
-	err := queries.RestoreTaskFromVersion(c.Request().Context(), db.RestoreTaskFromVersionParams{
+	err = queries.RestoreTaskFromVersion(c.Request().Context(), db.RestoreTaskFromVersionParams{
 		ID:     taskID,
 		UserID: userID,
 		ID_2:   versionID, // ID_2 is the version ID in RestoreTaskFromVersionParams
@@ -307,9 +353,9 @@ func apiLinkTaskHandler(c echo.Context) error {
 		return c.JSON(http.StatusUnauthorized, APIResponse{Success: false, Error: "Unauthorized"})
 	}
 	taskIDStr := c.Param("id")
-	var taskID pgtype.UUID
-	if err := parseUUID(taskIDStr, &taskID); err != nil {
-		return c.JSON(http.StatusBadRequest, APIResponse{Success: false, Error: "Invalid task ID"})
+	taskID, err := mustParseUUID(c, taskIDStr)
+	if err != nil {
+		return err
 	}
 
 	var req LinkTaskRequest
@@ -319,12 +365,14 @@ func apiLinkTaskHandler(c echo.Context) error {
 
 	var dependsOnTaskID pgtype.UUID
 	if req.DependsOnTaskID != "" {
-		if err := parseUUID(req.DependsOnTaskID, &dependsOnTaskID); err != nil {
-			return c.JSON(http.StatusBadRequest, APIResponse{Success: false, Error: "Invalid dependency task ID"})
+		var err error
+		dependsOnTaskID, err = mustParseUUID(c, req.DependsOnTaskID)
+		if err != nil {
+			return err
 		}
 	}
 
-	err := queries.LinkTaskDependency(c.Request().Context(), db.LinkTaskDependencyParams{
+	err = queries.LinkTaskDependency(c.Request().Context(), db.LinkTaskDependencyParams{
 		DependsOnTaskID:     dependsOnTaskID,
 		TriggerOnCompletion: pgtype.Bool{Bool: req.TriggerOnCompletion, Valid: true},
 		ID:                  taskID,

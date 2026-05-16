@@ -104,6 +104,55 @@ func (q *Queries) ClaimDueTasks(ctx context.Context, arg ClaimDueTasksParams) ([
 	return items, nil
 }
 
+const claimTaskByID = `-- name: ClaimTaskByID :one
+UPDATE tasks
+SET status = 'processing',
+    locked_by = $1,
+    locked_at = NOW()
+WHERE id = $2 AND status IN ('active', 'paused')
+RETURNING id, user_id, name, trigger_type, trigger_config, agent_prompt, status, locked_by, next_run, last_run, failure_count, missed_task_policy, depends_on_task_id, created_at, requires_approval, encrypted_secrets, last_approval_status, trigger_on_completion, task_type, native_code, workspace_id, max_retries, retry_count, backoff_strategy, ui_coordinates, branch_condition, is_bundle_root
+`
+
+type ClaimTaskByIDParams struct {
+	LockedBy pgtype.Text `json:"locked_by"`
+	ID       pgtype.UUID `json:"id"`
+}
+
+func (q *Queries) ClaimTaskByID(ctx context.Context, arg ClaimTaskByIDParams) (Task, error) {
+	row := q.db.QueryRow(ctx, claimTaskByID, arg.LockedBy, arg.ID)
+	var i Task
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.Name,
+		&i.TriggerType,
+		&i.TriggerConfig,
+		&i.AgentPrompt,
+		&i.Status,
+		&i.LockedBy,
+		&i.NextRun,
+		&i.LastRun,
+		&i.FailureCount,
+		&i.MissedTaskPolicy,
+		&i.DependsOnTaskID,
+		&i.CreatedAt,
+		&i.RequiresApproval,
+		&i.EncryptedSecrets,
+		&i.LastApprovalStatus,
+		&i.TriggerOnCompletion,
+		&i.TaskType,
+		&i.NativeCode,
+		&i.WorkspaceID,
+		&i.MaxRetries,
+		&i.RetryCount,
+		&i.BackoffStrategy,
+		&i.UiCoordinates,
+		&i.BranchCondition,
+		&i.IsBundleRoot,
+	)
+	return i, err
+}
+
 const completeTask = `-- name: CompleteTask :exec
 SELECT fn_complete_task($1, $2, $3)
 `

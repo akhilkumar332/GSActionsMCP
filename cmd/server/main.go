@@ -205,8 +205,12 @@ func main() {
 	authGroup.POST("/login", apiLoginHandler)
 	authGroup.POST("/logout", apiLogoutHandler)
 
-	// Protected API Handlers
-	api := e.Group("/api", csrfMiddleware, EchoSessionMiddleware)
+	// Unified V1 API
+	v1 := e.Group("/api/v1")
+	v1.POST("/webhooks/inbound/:token", handleInboundWebhook)
+
+	// Protected API Handlers (v1)
+	api := v1.Group("", csrfMiddleware, EchoSessionMiddleware)
 	api.GET("/dashboard", apiDashboardHandler)
 	api.POST("/rotate-api-key", apiRotateAPIKeyHandler)
 	api.GET("/tasks", apiListTasksHandler)
@@ -231,6 +235,20 @@ func main() {
 	api.DELETE("/webhooks/:id", apiDeleteWebhookHandler)
 	api.GET("/webhooks/:id/deliveries", apiWebhookDeliveriesHandler)
 
+	// Additional v1 routes moved from legacy v1 block
+	api.GET("/workspaces", handleGetWorkspaces)
+	api.POST("/workspaces", handleCreateWorkspace)
+	api.GET("/workspaces/:id/env", handleListWorkspaceEnvVars)
+	api.POST("/workspaces/:id/env", handleUpsertWorkspaceEnvVar)
+	api.DELETE("/workspaces/:id/env/:name", handleDeleteWorkspaceEnvVar)
+	api.GET("/templates", handleListPublicTemplates)
+	api.POST("/templates", handleCreateTemplate)
+	api.POST("/templates/:id/increment-uses", handleIncrementTemplateUses)
+	api.POST("/blueprints/deploy", apiDeployBlueprintHandler)
+
+	// Phase 8: The Monetization API (Billing)
+	api.POST("/billing/create-checkout-session", apiCreateCheckoutSession)
+
 	staff := api.Group("", EchoRequireRole("staff", "admin"))
 	staff.GET("/monitor", apiMonitorHandler)
 
@@ -245,26 +263,7 @@ func main() {
 	admin.GET("/seo", apiGetSEOHandler)
 	admin.POST("/seo", apiUpdateSEOHandler)
 
-	// Phase 8: The Monetization API (Billing)
-	api.POST("/billing/create-checkout-session", apiCreateCheckoutSession)
 	e.POST("/webhooks/stripe", apiStripeWebhook)
-
-	// Inbound Webhooks & V1 API
-	v1 := e.Group("/api/v1")
-	v1.POST("/webhooks/inbound/:token", handleInboundWebhook)
-	v1.GET("/workspaces", handleGetWorkspaces, EchoSessionMiddleware)
-	v1.POST("/workspaces", handleCreateWorkspace, EchoSessionMiddleware)
-	v1.GET("/workspaces/:id/env", handleListWorkspaceEnvVars, EchoSessionMiddleware)
-	v1.POST("/workspaces/:id/env", handleUpsertWorkspaceEnvVar, EchoSessionMiddleware)
-	v1.DELETE("/workspaces/:id/env/:name", handleDeleteWorkspaceEnvVar, EchoSessionMiddleware)
-	v1.GET("/templates", handleListPublicTemplates, EchoSessionMiddleware)
-	v1.POST("/templates", handleCreateTemplate, EchoSessionMiddleware)
-	v1.POST("/templates/:id/increment-uses", handleIncrementTemplateUses, EchoSessionMiddleware)
-	v1.POST("/blueprints/deploy", apiDeployBlueprintHandler, EchoSessionMiddleware)
-
-	// Task routes for frontend TaskWizard
-	v1.GET("/tasks", apiListTasksHandler, csrfMiddleware, EchoSessionMiddleware)
-	v1.POST("/tasks", apiCreateTaskHandler, csrfMiddleware, EchoSessionMiddleware)
 
 	// Catch-all handler for React SPA
 	e.GET("/*", func(c echo.Context) error {

@@ -357,7 +357,7 @@ const ApiReference = () => (
         <div className="bg-ink-900 p-6 rounded-2xl space-y-4 font-mono text-xs">
           <div className="flex gap-4">
             <span className="text-blue-400 font-bold w-12">GET</span>
-            <span className="text-slate-300">/api/dashboard</span>
+            <span className="text-slate-300">/api/v1/dashboard</span>
             <span className="text-slate-500 ml-auto">Retrieve account stats</span>
           </div>
           <div className="flex gap-4 border-t border-white/5 pt-4">

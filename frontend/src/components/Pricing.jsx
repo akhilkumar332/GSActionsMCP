@@ -14,7 +14,7 @@ const Pricing = () => {
       return;
     }
     try {
-      const res = await axios.post('/api/billing/create-checkout-session');
+      const res = await axios.post('/api/v1/billing/create-checkout-session');
       if (res.data.success && res.data.data.url) {
         window.location.assign(res.data.data.url);
       }

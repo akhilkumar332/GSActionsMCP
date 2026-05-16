@@ -156,9 +156,9 @@ const TaskWizard = ({ isOpen, onClose, onTaskCreated, initialData, isInline = fa
 
       let res;
       if (initialData?.id) {
-        res = await axios.patch(`/api/tasks/${initialData.id}`, payload);
+        res = await axios.patch(`/api/v1/tasks/${initialData.id}`, payload);
       } else {
-        res = await axios.post('/api/tasks', payload);
+        res = await axios.post('/api/v1/tasks', payload);
       }
 
       if (res.data.success) {

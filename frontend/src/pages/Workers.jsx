@@ -14,7 +14,7 @@ const Workers = () => {
   const fetchWorkers = useCallback(async () => {
     setRefreshing(true);
     try {
-      const res = await axios.get('/api/admin/workers');
+      const res = await axios.get('/api/v1/admin/workers');
       if (res.data.success) {
         setWorkers(res.data.data || []);
       }

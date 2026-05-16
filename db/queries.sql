@@ -99,6 +99,14 @@ UPDATE tasks SET status = $1, locked_by = NULL WHERE id = $2 AND user_id = $3;
 -- name: UpdateTaskStatusAndFailureCount :exec
 UPDATE tasks SET status = $1, locked_by = NULL, failure_count = $2, retry_count = $3 WHERE id = $4 AND user_id = $5;
 
+-- name: ClaimTaskByID :one
+UPDATE tasks
+SET status = 'processing',
+    locked_by = $1,
+    locked_at = NOW()
+WHERE id = $2 AND status IN ('active', 'paused')
+RETURNING *;
+
 -- name: UpdateTaskRetryCount :exec
 UPDATE tasks SET retry_count = $1 WHERE id = $2 AND user_id = $3;
 

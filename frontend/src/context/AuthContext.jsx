@@ -27,7 +27,7 @@ export const AuthProvider = ({ children }) => {
 
   const checkAuth = useCallback(async () => {
     try {
-      const res = await axios.get('/api/dashboard');
+      const res = await axios.get('/api/v1/dashboard');
       if (res.data.success) {
         setUser(res.data.data.user);
       }

@@ -143,11 +143,11 @@ func handleTaskClaimNotification(payload string) {
 			return
 		}
 
-		handleClaimedTask(workerCtx, t)
+		handleDispatchTask(workerCtx, t, nil)
 	}()
 }
 
-func handleClaimedTask(workerCtx context.Context, t db.Task) {
+func handleDispatchTask(workerCtx context.Context, t db.Task, triggerPayload map[string]interface{}) {
 	isOnline := GlobalSessionManager.IsOnline(workerCtx, t.UserID)
 
 	taskID := formatUUID(t.ID)
@@ -404,15 +404,20 @@ func handleClaimedTask(workerCtx context.Context, t db.Task) {
 		InputData:   []byte(t.AgentPrompt),
 	})
 
-	resolvedPrompt := resolvePromptVariables(workerCtx, t.UserID, t.AgentPrompt)
+	resolvedPrompt := resolvePromptVariables(workerCtx, t.UserID, t.AgentPrompt, triggerPayload)
 
-	payloadBytes, _ := json.Marshal(map[string]interface{}{
+	payloadMap := map[string]interface{}{
 		"task_id":        taskID,
 		"prompt":         resolvedPrompt,
 		"execution_id":   executionID,
 		"trigger_type":   t.TriggerType.String,
 		"trigger_config": string(t.TriggerConfig),
-	})
+	}
+	if triggerPayload != nil {
+		payloadMap["trigger_payload"] = triggerPayload
+	}
+
+	payloadBytes, _ := json.Marshal(payloadMap)
 	subscribers, err := RedisClient.Publish(workerCtx, fmt.Sprintf("trigger_task:%s", t.UserID), string(payloadBytes)).Result()
 	if err != nil || subscribers == 0 {
 		observeTaskOutcome("delivery_failure")
@@ -550,8 +555,8 @@ func handleClaimedTask(workerCtx context.Context, t db.Task) {
 	log.Printf("Task %s delivered to node. Remaining in 'processing' status.", taskID)
 }
 
-func resolvePromptVariables(ctx context.Context, userID string, prompt string) string {
-	return promptVarRegex.ReplaceAllStringFunc(prompt, func(match string) string {
+func resolvePromptVariables(ctx context.Context, userID string, prompt string, triggerPayload map[string]interface{}) string {
+	resolved := promptVarRegex.ReplaceAllStringFunc(prompt, func(match string) string {
 		submatch := promptVarRegex.FindStringSubmatch(match)
 		if len(submatch) < 2 {
 			return match
@@ -573,6 +578,23 @@ func resolvePromptVariables(ctx context.Context, userID string, prompt string) s
 		}
 		return string(output)
 	})
+
+	// Also support {{webhook.body.FIELD}} in normal scheduler flows if payload exists
+	if triggerPayload != nil {
+		resolved = webhookBodyRegex.ReplaceAllStringFunc(resolved, func(match string) string {
+			submatches := webhookBodyRegex.FindStringSubmatch(match)
+			if len(submatches) < 2 {
+				return match
+			}
+			key := submatches[1]
+			if val, ok := triggerPayload[key]; ok {
+				return fmt.Sprintf("%v", val)
+			}
+			return match
+		})
+	}
+
+	return resolved
 }
 
 func evaluateBranchCondition(condition []byte, parentOutput string) bool {

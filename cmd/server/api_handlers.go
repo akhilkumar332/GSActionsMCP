@@ -94,9 +94,9 @@ func apiLoginHandler(c echo.Context) error {
 	})
 
 	// Parse session ID into pgtype.UUID
-	var sessID pgtype.UUID
-	if err := parseUUID(sessionID, &sessID); err != nil {
-		return c.JSON(http.StatusInternalServerError, APIResponse{Success: false, Error: "Internal Error"})
+	sessID, err := mustParseUUID(c, sessionID)
+	if err != nil {
+		return err
 	}
 
 	// Fetch user info to return
@@ -135,8 +135,7 @@ func apiLogoutHandler(c echo.Context) error {
 	user := getUserFromEcho(c)
 	cookie, err := c.Cookie("session_id")
 	if err == nil && cookie.Value != "" {
-		var sessID pgtype.UUID
-		if err := parseUUID(cookie.Value, &sessID); err == nil {
+		if sessID, err := mustParseUUID(c, cookie.Value); err == nil {
 			_ = queries.DeleteWebSession(c.Request().Context(), sessID)
 		}
 	}
@@ -391,9 +390,9 @@ func apiApproveTaskHandler(c echo.Context) error {
 		return c.JSON(http.StatusUnauthorized, APIResponse{Success: false, Error: "Unauthorized"})
 	}
 	idStr := c.Param("id")
-	var id pgtype.UUID
-	if err := parseUUID(idStr, &id); err != nil {
-		return c.JSON(http.StatusBadRequest, APIResponse{Success: false, Error: "Invalid task ID"})
+	id, err := mustParseUUID(c, idStr)
+	if err != nil {
+		return err
 	}
 	exists, err := queries.CheckTaskOwnership(c.Request().Context(), db.CheckTaskOwnershipParams{
 		ID:     id,
@@ -431,9 +430,9 @@ func apiDenyTaskHandler(c echo.Context) error {
 		return c.JSON(http.StatusUnauthorized, APIResponse{Success: false, Error: "Unauthorized"})
 	}
 	idStr := c.Param("id")
-	var id pgtype.UUID
-	if err := parseUUID(idStr, &id); err != nil {
-		return c.JSON(http.StatusBadRequest, APIResponse{Success: false, Error: "Invalid task ID"})
+	id, err := mustParseUUID(c, idStr)
+	if err != nil {
+		return err
 	}
 	exists, err := queries.CheckTaskOwnership(c.Request().Context(), db.CheckTaskOwnershipParams{
 		ID:     id,
@@ -608,12 +607,13 @@ func apiDeleteWebhookHandler(c echo.Context) error {
 		return c.JSON(http.StatusUnauthorized, APIResponse{Success: false, Error: "Unauthorized"})
 	}
 	idStr := c.Param("id")
-	var id pgtype.UUID
-	if err := parseUUID(idStr, &id); err != nil {
-		return c.JSON(http.StatusBadRequest, APIResponse{Success: false, Error: "Invalid webhook ID"})
+	id, err := mustParseUUID(c, idStr)
+	if err != nil {
+		return err
 	}
 
-	err := queries.DeleteOutboundWebhook(c.Request().Context(), db.DeleteOutboundWebhookParams{
+	err = queries.DeleteOutboundWebhook(c.Request().Context(), db.DeleteOutboundWebhookParams{
+
 		ID:     id,
 		UserID: user.ID,
 	})
@@ -637,9 +637,9 @@ func apiWebhookDeliveriesHandler(c echo.Context) error {
 		return c.JSON(http.StatusUnauthorized, APIResponse{Success: false, Error: "Unauthorized"})
 	}
 	idStr := c.Param("id")
-	var id pgtype.UUID
-	if err := parseUUID(idStr, &id); err != nil {
-		return c.JSON(http.StatusBadRequest, APIResponse{Success: false, Error: "Invalid webhook ID"})
+	id, err := mustParseUUID(c, idStr)
+	if err != nil {
+		return err
 	}
 
 	rows, err := queries.ListWebhookDeliveries(c.Request().Context(), db.ListWebhookDeliveriesParams{

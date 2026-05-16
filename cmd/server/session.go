@@ -120,17 +120,19 @@ func (sm *SessionManager) MaintainHeartbeat(ctx context.Context, userID string, 
 						defer workerWG.Done()
 						executionStart := time.Now()
 
-						var taskData map[string]string
+						var taskData map[string]interface{}
 						if err := json.Unmarshal([]byte(payload), &taskData); err != nil {
 							log.Printf("Failed to unmarshal pubsub payload: %v", err)
 							return
 						}
 
-						taskID := taskData["task_id"]
-						prompt := taskData["prompt"]
-						executionID := taskData["execution_id"]
-						triggerType := taskData["trigger_type"]
-						triggerConfigStr := taskData["trigger_config"]
+						taskID, _ := taskData["task_id"].(string)
+						prompt, _ := taskData["prompt"].(string)
+						executionID, _ := taskData["execution_id"].(string)
+						triggerType, _ := taskData["trigger_type"].(string)
+						triggerConfigStr, _ := taskData["trigger_config"].(string)
+						triggerPayload, _ := taskData["trigger_payload"].(map[string]interface{})
+
 						if taskID == "" || prompt == "" || executionID == "" || triggerType == "" || triggerConfigStr == "" {
 							log.Printf("Incomplete Pub/Sub payload for user %s: %+v", userID, taskData)
 							return
@@ -163,7 +165,7 @@ func (sm *SessionManager) MaintainHeartbeat(ctx context.Context, userID string, 
 							emailStr = userEmail.String
 						}
 
-						// 2. Resolve Prompt (Secrets + Chaining)
+						// 2. Resolve Prompt (Secrets + Chaining + Webhook Body)
 						queries.CreateExecutionTrace(dbCtx, db.CreateExecutionTraceParams{
 							TaskID:      tid,
 							ExecutionID: executionID,
@@ -171,7 +173,7 @@ func (sm *SessionManager) MaintainHeartbeat(ctx context.Context, userID string, 
 							StepName:    "Prompt Resolution",
 							InputData:   []byte(prompt),
 						})
-						finalPrompt, secretCount, chained, err := resolvePrompt(dbCtx, userID, tid, prompt, t.DependsOnTaskID)
+						finalPrompt, secretCount, chained, err := resolvePrompt(dbCtx, userID, tid, prompt, t.DependsOnTaskID, triggerPayload)
 						if err != nil {
 							log.Printf("Prompt resolution failed for task %s: %v", taskID, err)
 							queries.CreateExecutionTrace(dbCtx, db.CreateExecutionTraceParams{

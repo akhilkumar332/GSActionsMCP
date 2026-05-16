@@ -17,7 +17,7 @@ const AdminSEO = () => {
   useEffect(() => {
     const fetchSEO = async () => {
       try {
-        const res = await axios.get('/api/admin/seo');
+        const res = await axios.get('/api/v1/admin/seo');
         if (res.data.success) {
           const d = res.data.data;
           setSettings({
@@ -41,7 +41,7 @@ const AdminSEO = () => {
     setSaving(true);
     setMessage(null);
     try {
-      await axios.post('/api/admin/seo', settings);
+      await axios.post('/api/v1/admin/seo', settings);
       setMessage({ type: 'success', text: 'SEO configuration published to edge nodes successfully.' });
     } catch {
       setMessage({ type: 'error', text: 'Failed to update SEO configuration.' });

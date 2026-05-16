@@ -19,10 +19,9 @@ const Insights = () => {
     const fetchInsights = async () => {
       try {
         const [insightsRes, trendsRes] = await Promise.all([
-          axios.get('/api/admin/insights'),
-          axios.get('/api/admin/analytics/trends')
-        ]);
-        if (insightsRes.data.success) {
+            axios.get('/api/v1/admin/insights'),
+            axios.get('/api/v1/admin/analytics/trends')
+        ]);        if (insightsRes.data.success) {
           setData(insightsRes.data.data);
         }
         if (trendsRes.data.success) {

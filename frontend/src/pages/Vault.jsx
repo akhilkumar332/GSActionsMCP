@@ -23,7 +23,7 @@ const Vault = () => {
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await axios.get('/api/secrets');
+      const res = await axios.get('/api/v1/secrets');
       if (res.data.success) {
         setSecrets(res.data.data || []);
       }
@@ -44,7 +44,7 @@ const Vault = () => {
   const handleDelete = async (name) => {
     if (!confirm(`Are you sure you want to delete secret "${name}"?`)) return;
     try {
-      await axios.delete(`/api/secrets/${name}`);
+      await axios.delete(`/api/v1/secrets/${name}`);
       addToast(`Secret "${name}" deleted`);
       fetchData();
     } catch {
@@ -60,7 +60,7 @@ const Vault = () => {
     }
     setSubmitting(true);
     try {
-      await axios.post('/api/secrets', newSecret);
+      await axios.post('/api/v1/secrets', newSecret);
       addToast(`Secret "${newSecret.name}" stored successfully`);
       setNewSecret({ name: '', value: '' });
       setShowAddForm(false);

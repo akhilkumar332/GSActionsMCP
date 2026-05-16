@@ -11,8 +11,9 @@ import (
 
 var secretRegex = regexp.MustCompile(`\{\{secrets\.([a-zA-Z0-9_-]+)\}\}`)
 var envVarRegex = regexp.MustCompile(`\{\{env\.([a-zA-Z0-9_-]+)\}\}`)
+var webhookBodyRegex = regexp.MustCompile(`\{\{webhook\.body\.([a-zA-Z0-9_-]+)\}\}`)
 
-func resolvePrompt(ctx context.Context, userID string, taskID pgtype.UUID, rawPrompt string, parentTaskID pgtype.UUID) (string, int, bool, error) {
+func resolvePrompt(ctx context.Context, userID string, taskID pgtype.UUID, rawPrompt string, parentTaskID pgtype.UUID, triggerPayload map[string]interface{}) (string, int, bool, error) {
 	resolved := rawPrompt
 	resolvedSecrets := make(map[string]string)
 	secretCount := 0
@@ -78,8 +79,23 @@ func resolvePrompt(ctx context.Context, userID string, taskID pgtype.UUID, rawPr
 		})
 	}
 
+	// 3. Resolve Webhook Body Variables: {{webhook.body.FIELD}}
+	if triggerPayload != nil {
+		resolved = webhookBodyRegex.ReplaceAllStringFunc(resolved, func(match string) string {
+			submatches := webhookBodyRegex.FindStringSubmatch(match)
+			if len(submatches) < 2 {
+				return match
+			}
+			key := submatches[1]
+			if val, ok := triggerPayload[key]; ok {
+				return fmt.Sprintf("%v", val)
+			}
+			return match
+		})
+	}
+
 	chained := false
-	// 3. Resolve Chaining Context
+	// 4. Resolve Chaining Context
 	if parentTaskID.Valid {
 		parentOutput, err := queries.GetLatestTaskLogResponse(ctx, db.GetLatestTaskLogResponseParams{
 			TaskID: parentTaskID,

@@ -23,7 +23,7 @@ const Webhooks = () => {
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await axios.get('/api/webhooks');
+      const res = await axios.get('/api/v1/webhooks');
       if (res.data.success) {
         setWebhooks(res.data.data || []);
       }
@@ -44,7 +44,7 @@ const Webhooks = () => {
   const handleDelete = async (id) => {
     if (!confirm(`Are you sure you want to delete this webhook?`)) return;
     try {
-      await axios.delete(`/api/webhooks/${id}`);
+      await axios.delete(`/api/v1/webhooks/${id}`);
       addToast(`Webhook deleted`);
       fetchData();
     } catch {
@@ -60,7 +60,7 @@ const Webhooks = () => {
     }
     setSubmitting(true);
     try {
-      await axios.post('/api/webhooks', newWebhook);
+      await axios.post('/api/v1/webhooks', newWebhook);
       addToast(`Webhook registered successfully`);
       setNewWebhook({ endpoint_url: '', event_types: ['task_executed'] });
       setShowAddForm(false);

@@ -14,7 +14,7 @@ const TaskHistory = () => {
 
   const fetchHistory = useCallback(async () => {
     try {
-      const res = await axios.get(`/api/tasks/${id}/versions`);
+      const res = await axios.get(`/api/v1/tasks/${id}/versions`);
       if (res.data.success) {
         setHistory(res.data.data || []);
       }
@@ -37,7 +37,7 @@ const TaskHistory = () => {
     
     setRestoring(versionId);
     try {
-      await axios.post(`/api/tasks/${id}/restore/${versionId}`);
+      await axios.post(`/api/v1/tasks/${id}/restore/${versionId}`);
       alert('Task restored successfully');
       fetchHistory();
     } catch {

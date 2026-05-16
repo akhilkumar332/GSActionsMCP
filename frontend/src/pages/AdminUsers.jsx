@@ -11,7 +11,7 @@ const AdminUsers = () => {
 
   const fetchUsers = async (query = '') => {
     try {
-      const res = await axios.get(`/api/admin/users?search=${encodeURIComponent(query)}`);
+      const res = await axios.get(`/api/v1/admin/users?search=${encodeURIComponent(query)}`);
       if (res.data.success) {
         setUsers(res.data.data || []);
       }
@@ -31,7 +31,7 @@ const AdminUsers = () => {
 
   const handleUpdate = async (userId, role, tier) => {
     try {
-      await axios.post('/api/admin/users/update', { user_id: userId, role, tier });
+      await axios.post('/api/v1/admin/users/update', { user_id: userId, role, tier });
       await fetchUsers();
     } catch {
       alert('Failed to update user');
