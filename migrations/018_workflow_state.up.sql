@@ -1,4 +1,4 @@
-CREATE TABLE workflow_state (
+CREATE TABLE IF NOT EXISTS workflow_state (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     task_id UUID REFERENCES tasks(id) ON DELETE CASCADE,
     execution_id TEXT NOT NULL,

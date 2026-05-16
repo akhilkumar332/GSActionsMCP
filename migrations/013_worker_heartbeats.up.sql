@@ -1,4 +1,4 @@
-CREATE TABLE worker_heartbeats (
+CREATE TABLE IF NOT EXISTS worker_heartbeats (
     worker_id TEXT PRIMARY KEY,
     hostname TEXT,
     last_heartbeat TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,

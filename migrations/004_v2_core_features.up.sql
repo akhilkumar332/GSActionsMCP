@@ -1,6 +1,6 @@
-ALTER TABLE tasks ADD COLUMN requires_approval BOOLEAN DEFAULT FALSE;
-ALTER TABLE tasks ADD COLUMN encrypted_secrets BYTEA;
-ALTER TABLE tasks ADD COLUMN last_approval_status VARCHAR(20); -- 'pending', 'approved', 'denied'
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS requires_approval BOOLEAN DEFAULT FALSE;
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS encrypted_secrets BYTEA;
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS last_approval_status VARCHAR(20); -- 'pending', 'approved', 'denied'
 
 -- Redefine fn_complete_task to handle the new approval columns
 CREATE OR REPLACE FUNCTION fn_complete_task(task_id UUID, new_next_run TIMESTAMP WITH TIME ZONE, new_status TEXT DEFAULT 'active')
