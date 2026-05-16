@@ -13,7 +13,7 @@ import DashboardLayout from '../components/DashboardLayout';
 import TaskWizard from '../components/TaskWizard';
 import { motion, AnimatePresence } from 'framer-motion';
 import axios from 'axios';
-import { Save, RefreshCw, Layers, X, Trash2 } from 'lucide-react';
+import { Save, RefreshCw, Layers, X, Trash2, Play, Pause, FastForward, Rewind, Activity } from 'lucide-react';
 
 const WorkflowCanvas = () => {
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
@@ -22,6 +22,15 @@ const WorkflowCanvas = () => {
   const [saving, setSaving] = useState(false);
   const [selectedTask, setSelectedTask] = useState(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  
+  // Playback states
+  const [playbackMode, setPlaybackMode] = useState(false);
+  const [executions, setExecutions] = useState([]);
+  const [selectedExecutionId, setSelectedExecutionId] = useState('');
+  const [traces, setTraces] = useState([]);
+  const [currentTraceIndex, setCurrentTraceIndex] = useState(-1);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const playbackTimerRef = useRef(null);
   
   const sseRef = useRef(null);
 
@@ -114,6 +123,99 @@ const WorkflowCanvas = () => {
       setLoading(false);
     }
   }, [mapTasksToFlow]);
+
+  const fetchExecutions = useCallback(async (taskId) => {
+    try {
+      const res = await axios.get(`/api/v1/tasks/${taskId}/executions`);
+      if (res.data.success) {
+        setExecutions(res.data.data || []);
+        if (res.data.data?.length > 0) {
+          setSelectedExecutionId(res.data.data[0].id);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to fetch executions', err);
+    }
+  }, []);
+
+  const fetchTraces = useCallback(async (taskId, executionId) => {
+    try {
+      const res = await axios.get(`/api/v1/tasks/${taskId}/traces/${executionId}`);
+      if (res.data.success) {
+        setTraces(res.data.data || []);
+        setCurrentTraceIndex(0);
+      }
+    } catch (err) {
+      console.error('Failed to fetch traces', err);
+    }
+  }, []);
+
+  useEffect(() => {
+    const loadExecutions = async () => {
+      if (playbackMode && selectedTask) {
+        await fetchExecutions(selectedTask.id);
+      } else {
+        setExecutions([]);
+        setTraces([]);
+        setCurrentTraceIndex(-1);
+        setIsPlaying(false);
+      }
+    };
+    loadExecutions();
+  }, [playbackMode, selectedTask, fetchExecutions]);
+
+  useEffect(() => {
+    const loadTraces = async () => {
+      if (selectedExecutionId && selectedTask) {
+        await fetchTraces(selectedTask.id, selectedExecutionId);
+      }
+    };
+    loadTraces();
+  }, [selectedExecutionId, selectedTask, fetchTraces]);
+
+  // Handle Playback Animation
+  useEffect(() => {
+    if (isPlaying && traces.length > 0) {
+      playbackTimerRef.current = setInterval(() => {
+        setCurrentTraceIndex(prev => {
+          if (prev >= traces.length - 1) {
+            setIsPlaying(false);
+            return prev;
+          }
+          return prev + 1;
+        });
+      }, 1000);
+    } else {
+      clearInterval(playbackTimerRef.current);
+    }
+    return () => clearInterval(playbackTimerRef.current);
+  }, [isPlaying, traces]);
+
+  // Update visual nodes based on playback
+  useEffect(() => {
+    if (playbackMode && currentTraceIndex >= 0 && traces[currentTraceIndex]) {
+      const activeStepName = traces[currentTraceIndex].step_name;
+      
+      setNodes(prev => prev.map(node => {
+        const isActive = node.data.task.name === activeStepName || 
+                        (currentTraceIndex === 0 && node.id === selectedTask?.id);
+        
+        return {
+          ...node,
+          style: {
+            ...node.style,
+            border: isActive ? '3px solid #f59e0b' : '1px solid rgba(255, 255, 255, 0.1)',
+            boxShadow: isActive ? '0 0 25px rgba(245, 158, 11, 0.4)' : 'none',
+            transform: isActive ? 'scale(1.05)' : 'scale(1)',
+            transition: 'all 0.3s ease'
+          }
+        };
+      }));
+    } else if (!playbackMode) {
+        // Reset styles when leaving playback mode
+        fetchTasks();
+    }
+  }, [playbackMode, currentTraceIndex, traces, selectedTask, fetchTasks, setNodes]);
 
   const updateTaskStatusLocally = useCallback((taskId, status) => {
     setNodes(prev => prev.map(node => {
@@ -382,6 +484,13 @@ const WorkflowCanvas = () => {
                   </div>
                   <div className="flex items-center gap-2">
                     <button 
+                      onClick={() => setPlaybackMode(!playbackMode)}
+                      className={`p-2 rounded-xl transition-all ${playbackMode ? 'bg-accent-orange text-white shadow-lg shadow-orange-500/20' : 'hover:bg-white/5 text-slate-500'}`}
+                      title={playbackMode ? "Exit Playback" : "Visual Playback"}
+                    >
+                      <Activity size={20} />
+                    </button>
+                    <button 
                       onClick={() => handleDeleteTask(selectedTask.id)}
                       className="p-2 hover:bg-red-500/10 rounded-xl text-red-500 transition-colors"
                       title="Delete Task"
@@ -397,17 +506,111 @@ const WorkflowCanvas = () => {
                   </div>
                 </div>
                 
-                <div className="flex-1 overflow-hidden relative">
-                   {/* TaskWizard is used as the editor inside the sidebar */}
-                   <TaskWizard 
-                      isOpen={isSidebarOpen} 
-                      onClose={() => setIsSidebarOpen(false)} 
-                      initialData={selectedTask}
-                      onTaskCreated={() => {
-                        fetchTasks();
-                        setIsSidebarOpen(false);
-                      }}
-                   />
+                <div className="flex-1 overflow-y-auto relative custom-scrollbar">
+                   {playbackMode ? (
+                     <div className="p-6 space-y-8">
+                       <div className="space-y-4">
+                         <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Select Execution</label>
+                         <select 
+                           value={selectedExecutionId}
+                           onChange={(e) => setSelectedExecutionId(e.target.value)}
+                           className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-accent-orange"
+                         >
+                           {executions.map(ex => (
+                             <option key={ex.id} value={ex.id} className="bg-zinc-900">
+                               {new Date(ex.started_at).toLocaleString()} ({ex.status})
+                             </option>
+                           ))}
+                         </select>
+                       </div>
+
+                       {traces.length > 0 ? (
+                         <div className="space-y-6">
+                           <div className="bg-white/5 border border-white/10 rounded-[1.5rem] p-6 space-y-6">
+                             <div className="flex items-center justify-between">
+                               <div className="text-[10px] font-black uppercase tracking-widest text-accent-orange">Playback Controls</div>
+                               <div className="text-[10px] font-black text-slate-500">{currentTraceIndex + 1} / {traces.length}</div>
+                             </div>
+                             
+                             <div className="flex items-center justify-center gap-4">
+                               <button 
+                                 onClick={() => setCurrentTraceIndex(prev => Math.max(0, prev - 1))}
+                                 className="p-3 bg-white/5 rounded-full text-white hover:bg-white/10 transition-colors"
+                               >
+                                 <Rewind size={20} />
+                               </button>
+                               <button 
+                                 onClick={() => setIsPlaying(!isPlaying)}
+                                 className="p-5 bg-accent-orange rounded-full text-white hover:scale-110 transition-transform shadow-lg shadow-orange-500/20"
+                               >
+                                 {isPlaying ? <Pause size={24} /> : <Play size={24} />}
+                               </button>
+                               <button 
+                                 onClick={() => setCurrentTraceIndex(prev => Math.min(traces.length - 1, prev + 1))}
+                                 className="p-3 bg-white/5 rounded-full text-white hover:bg-white/10 transition-colors"
+                               >
+                                 <FastForward size={20} />
+                               </button>
+                             </div>
+
+                             <div className="space-y-2">
+                               <input 
+                                 type="range" 
+                                 min="0" 
+                                 max={traces.length - 1} 
+                                 value={currentTraceIndex}
+                                 onChange={(e) => setCurrentTraceIndex(parseInt(e.target.value))}
+                                 className="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-accent-orange"
+                               />
+                             </div>
+                           </div>
+
+                           <div className="space-y-4">
+                             <div className="text-[10px] font-black uppercase tracking-widest text-slate-500">Step Details</div>
+                             <div className="bg-white/5 border border-white/10 rounded-[1.5rem] p-6 space-y-4">
+                               <div>
+                                 <div className="text-[8px] font-black uppercase text-slate-500 mb-1">Step Name</div>
+                                 <div className="text-sm font-bold text-white">{traces[currentTraceIndex].step_name}</div>
+                               </div>
+                               <div>
+                                 <div className="text-[8px] font-black uppercase text-slate-500 mb-1">Input</div>
+                                 <pre className="text-[10px] bg-black/40 p-3 rounded-lg text-emerald-400 overflow-x-auto">
+                                   {traces[currentTraceIndex].input_data ? JSON.stringify(JSON.parse(traces[currentTraceIndex].input_data), null, 2) : 'null'}
+                                 </pre>
+                               </div>
+                               <div>
+                                 <div className="text-[8px] font-black uppercase text-slate-500 mb-1">Output</div>
+                                 <pre className="text-[10px] bg-black/40 p-3 rounded-lg text-amber-400 overflow-x-auto">
+                                   {traces[currentTraceIndex].output_data ? JSON.stringify(JSON.parse(traces[currentTraceIndex].output_data), null, 2) : 'null'}
+                                 </pre>
+                               </div>
+                               <div className="flex items-center justify-between pt-2 border-t border-white/5">
+                                 <div className="text-[8px] font-black uppercase text-slate-500">Duration</div>
+                                 <div className="text-[10px] font-mono text-white">
+                                   {((new Date(traces[currentTraceIndex].completed_at) - new Date(traces[currentTraceIndex].started_at)) / 1000).toFixed(2)}s
+                                 </div>
+                               </div>
+                             </div>
+                           </div>
+                         </div>
+                       ) : (
+                         <div className="flex flex-col items-center justify-center py-12 text-center space-y-4">
+                           <Activity size={32} className="text-slate-700 animate-pulse" />
+                           <div className="text-[10px] font-black uppercase tracking-widest text-slate-500">No traces available for this execution</div>
+                         </div>
+                       )}
+                     </div>
+                   ) : (
+                     <TaskWizard 
+                        isOpen={isSidebarOpen} 
+                        onClose={() => setIsSidebarOpen(false)} 
+                        initialData={selectedTask}
+                        onTaskCreated={() => {
+                          fetchTasks();
+                          setIsSidebarOpen(false);
+                        }}
+                     />
+                   )}
                 </div>
               </motion.div>
             </>

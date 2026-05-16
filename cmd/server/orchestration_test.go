@@ -76,7 +76,7 @@ func TestResolvePromptVariables(t *testing.T) {
 		}
 
 		prompt := "Result was: {{task." + taskID + ".output}}"
-		resolved := resolvePromptVariables(ctx, userID, prompt, nil)
+		resolved := resolvePromptVariables(ctx, userID, prompt, nil, nil)
 		expected := "Result was: " + expectedOutput
 
 		if resolved != expected {
@@ -86,7 +86,7 @@ func TestResolvePromptVariables(t *testing.T) {
 
 	t.Run("Invalid UUID format", func(t *testing.T) {
 		prompt := "Result was: {{task.invalid-uuid.output}}"
-		resolved := resolvePromptVariables(ctx, userID, prompt, nil)
+		resolved := resolvePromptVariables(ctx, userID, prompt, nil, nil)
 		if resolved != prompt {
 			t.Errorf("Expected no change for invalid UUID, got %q", resolved)
 		}
@@ -115,7 +115,7 @@ func TestResolvePromptVariables(t *testing.T) {
 		}
 
 		prompt := "{{task." + task1ID + ".output}} and {{task." + task2ID + ".output}}"
-		resolved := resolvePromptVariables(ctx, userID, prompt, nil)
+		resolved := resolvePromptVariables(ctx, userID, prompt, nil, nil)
 		expected := "Output 1 and Output 2"
 
 		if resolved != expected {

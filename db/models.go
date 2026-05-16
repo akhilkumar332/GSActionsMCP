@@ -87,6 +87,7 @@ type Task struct {
 	UiCoordinates       []byte             `json:"ui_coordinates"`
 	BranchCondition     []byte             `json:"branch_condition"`
 	IsBundleRoot        pgtype.Bool        `json:"is_bundle_root"`
+	LoopCondition       []byte             `json:"loop_condition"`
 }
 
 type TaskLog struct {
@@ -185,6 +186,14 @@ type WorkerHeartbeat struct {
 	Hostname      pgtype.Text        `json:"hostname"`
 	LastHeartbeat pgtype.Timestamptz `json:"last_heartbeat"`
 	TaskCount     pgtype.Int4        `json:"task_count"`
+}
+
+type WorkflowState struct {
+	ID          pgtype.UUID        `json:"id"`
+	TaskID      pgtype.UUID        `json:"task_id"`
+	ExecutionID string             `json:"execution_id"`
+	StateData   []byte             `json:"state_data"`
+	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
 }
 
 type Workspace struct {

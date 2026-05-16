@@ -260,6 +260,7 @@ ALTER TABLE tasks ADD COLUMN backoff_strategy VARCHAR(50) DEFAULT 'linear';
 ALTER TABLE tasks ADD COLUMN ui_coordinates JSONB;
 ALTER TABLE tasks ADD COLUMN branch_condition JSONB;
 ALTER TABLE tasks ADD COLUMN is_bundle_root BOOLEAN DEFAULT FALSE;
+ALTER TABLE tasks ADD COLUMN loop_condition JSONB; -- e.g. {"state_path": "count", "op": "lt", "value": 5}
 
 CREATE TABLE worker_heartbeats (
     worker_id TEXT PRIMARY KEY,
@@ -300,3 +301,13 @@ CREATE TABLE workspace_env_vars (
 );
 
 CREATE INDEX idx_workspace_env_vars_workspace_id ON workspace_env_vars (workspace_id);
+
+-- Workflow State Persistence
+CREATE TABLE workflow_state (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    task_id UUID NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+    execution_id TEXT NOT NULL,
+    state_data JSONB DEFAULT '{}',
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(task_id, execution_id)
+);

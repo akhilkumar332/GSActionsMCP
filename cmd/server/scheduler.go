@@ -13,10 +13,13 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/robfig/cron/v3"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/propagation"
 	"schedule-mcp/db"
 )
 
 var promptVarRegex = regexp.MustCompile(`\{\{task\.([0-9a-fA-F-]{36})\.output\}\}`)
+var stateVarRegex = regexp.MustCompile(`\{\{state\.([a-zA-Z0-9._-]+)\}\}`)
 
 // runScheduler queries the DB every 10 seconds for due tasks
 func runScheduler(ctx context.Context) {
@@ -153,11 +156,16 @@ func handleDispatchTask(workerCtx context.Context, t db.Task, triggerPayload map
 	taskID := formatUUID(t.ID)
 	executionID := fmt.Sprintf("%s-%d", taskID, time.Now().UTC().UnixNano())
 
-	userEmail, err := queries.GetUserEmail(workerCtx, t.UserID)
+	// Load workflow state if it exists (try latest state for this task)
+	var state map[string]interface{}
+	stateBytes, _ := queries.GetLatestWorkflowState(workerCtx, t.ID)
+	if len(stateBytes) > 0 {
+		json.Unmarshal(stateBytes, &state)
+	}
+
+	userEmail, _ := queries.GetUserEmail(workerCtx, t.UserID)
 	emailStr := ""
-	if err != nil {
-		log.Printf("Error fetching user email for %s: %v", t.UserID, err)
-	} else if userEmail.Valid {
+	if userEmail.Valid {
 		emailStr = userEmail.String
 	}
 
@@ -408,7 +416,10 @@ func handleDispatchTask(workerCtx context.Context, t db.Task, triggerPayload map
 		InputData:   []byte(t.AgentPrompt),
 	})
 
-	resolvedPrompt := resolvePromptVariables(workerCtx, t.UserID, t.AgentPrompt, triggerPayload)
+	resolvedPrompt := resolvePromptVariables(workerCtx, t.UserID, t.AgentPrompt, triggerPayload, state)
+
+	traceContext := make(map[string]string)
+	otel.GetTextMapPropagator().Inject(workerCtx, propagation.MapCarrier(traceContext))
 
 	payloadMap := map[string]interface{}{
 		"task_id":        taskID,
@@ -416,6 +427,7 @@ func handleDispatchTask(workerCtx context.Context, t db.Task, triggerPayload map
 		"execution_id":   executionID,
 		"trigger_type":   t.TriggerType.String,
 		"trigger_config": string(t.TriggerConfig),
+		"trace_context":  traceContext,
 	}
 	if triggerPayload != nil {
 		payloadMap["trigger_payload"] = triggerPayload
@@ -559,7 +571,7 @@ func handleDispatchTask(workerCtx context.Context, t db.Task, triggerPayload map
 	log.Printf("Task %s delivered to node. Remaining in 'processing' status.", taskID)
 }
 
-func resolvePromptVariables(ctx context.Context, userID string, prompt string, triggerPayload map[string]interface{}) string {
+func resolvePromptVariables(ctx context.Context, userID string, prompt string, triggerPayload map[string]interface{}, state map[string]interface{}) string {
 	resolved := promptVarRegex.ReplaceAllStringFunc(prompt, func(match string) string {
 		submatch := promptVarRegex.FindStringSubmatch(match)
 		if len(submatch) < 2 {
@@ -583,6 +595,21 @@ func resolvePromptVariables(ctx context.Context, userID string, prompt string, t
 		return string(output)
 	})
 
+	// Support {{state.FIELD}}
+	resolved = stateVarRegex.ReplaceAllStringFunc(resolved, func(match string) string {
+		submatches := stateVarRegex.FindStringSubmatch(match)
+		if len(submatches) < 2 {
+			return match
+		}
+		key := submatches[1]
+		if state != nil {
+			if val, ok := state[key]; ok {
+				return fmt.Sprintf("%v", val)
+			}
+		}
+		return match
+	})
+
 	// Also support {{webhook.body.FIELD}} in normal scheduler flows if payload exists
 	if triggerPayload != nil {
 		resolved = webhookBodyRegex.ReplaceAllStringFunc(resolved, func(match string) string {
@@ -599,6 +626,34 @@ func resolvePromptVariables(ctx context.Context, userID string, prompt string, t
 	}
 
 	return resolved
+}
+
+func evaluateLoopCondition(loopConfig []byte, lastOutput string) bool {
+	if len(loopConfig) == 0 {
+		return false
+	}
+	var config map[string]interface{}
+	if err := json.Unmarshal(loopConfig, &config); err != nil {
+		log.Printf("Error unmarshaling loop config: %v", err)
+		return false
+	}
+
+	enabled, _ := config["enabled"].(bool)
+	if !enabled {
+		return false
+	}
+
+	condition, _ := config["condition"].(string)
+	value, _ := config["value"].(string)
+
+	switch condition {
+	case "contains":
+		return strings.Contains(lastOutput, value)
+	case "not_contains":
+		return !strings.Contains(lastOutput, value)
+	default:
+		return false
+	}
 }
 
 func evaluateBranchCondition(condition []byte, parentOutput string) bool {

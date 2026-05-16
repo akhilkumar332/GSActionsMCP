@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"regexp"
 
@@ -12,8 +13,9 @@ import (
 var secretRegex = regexp.MustCompile(`\{\{secrets\.([a-zA-Z0-9_-]+)\}\}`)
 var envVarRegex = regexp.MustCompile(`\{\{env\.([a-zA-Z0-9_-]+)\}\}`)
 var webhookBodyRegex = regexp.MustCompile(`\{\{webhook\.body\.([a-zA-Z0-9_-]+)\}\}`)
+var stateRegex = regexp.MustCompile(`\{\{state\.([a-zA-Z0-9._-]+)\}\}`)
 
-func resolvePrompt(ctx context.Context, userID string, taskID pgtype.UUID, rawPrompt string, parentTaskID pgtype.UUID, triggerPayload map[string]interface{}) (string, int, bool, error) {
+func resolvePrompt(ctx context.Context, userID string, taskID pgtype.UUID, executionID string, rawPrompt string, parentTaskID pgtype.UUID, triggerPayload map[string]interface{}) (string, int, bool, error) {
 	resolved := rawPrompt
 	resolvedSecrets := make(map[string]string)
 	secretCount := 0
@@ -94,8 +96,30 @@ func resolvePrompt(ctx context.Context, userID string, taskID pgtype.UUID, rawPr
 		})
 	}
 
+	// 4. Resolve Workflow State: {{state.VARIABLE}}
+	stateBytes, err := queries.GetWorkflowState(ctx, db.GetWorkflowStateParams{
+		TaskID:      taskID,
+		ExecutionID: executionID,
+	})
+	if err == nil {
+		var stateMap map[string]interface{}
+		if err := json.Unmarshal(stateBytes, &stateMap); err == nil {
+			resolved = stateRegex.ReplaceAllStringFunc(resolved, func(match string) string {
+				submatches := stateRegex.FindStringSubmatch(match)
+				if len(submatches) < 2 {
+					return match
+				}
+				key := submatches[1]
+				if val, ok := stateMap[key]; ok {
+					return fmt.Sprintf("%v", val)
+				}
+				return match
+			})
+		}
+	}
+
 	chained := false
-	// 4. Resolve Chaining Context
+	// 5. Resolve Chaining Context
 	if parentTaskID.Valid {
 		parentOutput, err := queries.GetLatestTaskLogResponse(ctx, db.GetLatestTaskLogResponseParams{
 			TaskID: parentTaskID,

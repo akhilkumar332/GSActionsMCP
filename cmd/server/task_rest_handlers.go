@@ -406,3 +406,77 @@ func apiLinkTaskHandler(c echo.Context) error {
 
 	return c.JSON(http.StatusOK, APIResponse{Success: true, Message: "Tasks linked successfully"})
 }
+
+func apiGetExecutionTracesHandler(c echo.Context) error {
+	userID := getUserID(c)
+	if userID == "" {
+		return c.JSON(http.StatusUnauthorized, APIResponse{Success: false, Error: "Unauthorized"})
+	}
+	taskIDStr := c.Param("id")
+	executionID := c.Param("execution_id")
+
+	taskID, err := mustParseUUID(c, taskIDStr)
+	if err != nil {
+		return err
+	}
+
+	// Check ownership
+	exists, err := queries.CheckTaskOwnership(c.Request().Context(), db.CheckTaskOwnershipParams{
+		ID:     taskID,
+		UserID: userID,
+	})
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, APIResponse{Success: false, Error: "Failed to verify task ownership"})
+	}
+	if !exists {
+		return c.JSON(http.StatusNotFound, APIResponse{Success: false, Error: "Task not found"})
+	}
+
+	traces, err := queries.ListExecutionTracesByExecutionID(c.Request().Context(), db.ListExecutionTracesByExecutionIDParams{
+		TaskID:      taskID,
+		ExecutionID: executionID,
+	})
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, APIResponse{Success: false, Error: "Failed to fetch execution traces"})
+	}
+	if traces == nil {
+		traces = []db.ExecutionTrace{}
+	}
+
+	return c.JSON(http.StatusOK, APIResponse{Success: true, Data: traces})
+}
+
+func apiListTaskExecutionsHandler(c echo.Context) error {
+	userID := getUserID(c)
+	if userID == "" {
+		return c.JSON(http.StatusUnauthorized, APIResponse{Success: false, Error: "Unauthorized"})
+	}
+	taskIDStr := c.Param("id")
+
+	taskID, err := mustParseUUID(c, taskIDStr)
+	if err != nil {
+		return err
+	}
+
+	// Check ownership
+	exists, err := queries.CheckTaskOwnership(c.Request().Context(), db.CheckTaskOwnershipParams{
+		ID:     taskID,
+		UserID: userID,
+	})
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, APIResponse{Success: false, Error: "Failed to verify task ownership"})
+	}
+	if !exists {
+		return c.JSON(http.StatusNotFound, APIResponse{Success: false, Error: "Task not found"})
+	}
+
+	executions, err := queries.ListTaskExecutionIDs(c.Request().Context(), taskID)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, APIResponse{Success: false, Error: "Failed to fetch task executions"})
+	}
+	if executions == nil {
+		executions = []db.ListTaskExecutionIDsRow{}
+	}
+
+	return c.JSON(http.StatusOK, APIResponse{Success: true, Data: executions})
+}

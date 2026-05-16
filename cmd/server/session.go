@@ -5,7 +5,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"strconv"
+	"strings"
 	"time"
+
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/propagation"
 
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/mark3labs/mcp-go/mcp"
@@ -126,6 +131,18 @@ func (sm *SessionManager) MaintainHeartbeat(ctx context.Context, userID string, 
 							return
 						}
 
+						// Extract trace context
+						traceMap, _ := taskData["trace_context"].(map[string]interface{})
+						carrier := propagation.MapCarrier{}
+						for k, v := range traceMap {
+							if s, ok := v.(string); ok {
+								carrier[k] = s
+							}
+						}
+						parentCtx := otel.GetTextMapPropagator().Extract(context.Background(), carrier)
+						ctx, span := otel.Tracer("scheduler-mcp").Start(parentCtx, "Redis Task Trigger")
+						defer span.End()
+
 						taskID, _ := taskData["task_id"].(string)
 						prompt, _ := taskData["prompt"].(string)
 						executionID, _ := taskData["execution_id"].(string)
@@ -145,7 +162,7 @@ func (sm *SessionManager) MaintainHeartbeat(ctx context.Context, userID string, 
 						}
 
 						// Keep DB operations alive across prompt resolution, sampling, and status updates.
-						dbCtx, dbCancel := context.WithTimeout(context.Background(), 45*time.Second)
+						dbCtx, dbCancel := context.WithTimeout(ctx, 45*time.Second)
 						defer dbCancel()
 
 						t, err := queries.GetTaskByID(dbCtx, db.GetTaskByIDParams{
@@ -173,7 +190,7 @@ func (sm *SessionManager) MaintainHeartbeat(ctx context.Context, userID string, 
 							StepName:    "Prompt Resolution",
 							InputData:   []byte(prompt),
 						})
-						finalPrompt, secretCount, chained, err := resolvePrompt(dbCtx, userID, tid, prompt, t.DependsOnTaskID, triggerPayload)
+						finalPrompt, secretCount, chained, err := resolvePrompt(dbCtx, userID, tid, executionID, prompt, t.DependsOnTaskID, triggerPayload)
 						if err != nil {
 							log.Printf("Prompt resolution failed for task %s: %v", taskID, err)
 							queries.CreateExecutionTrace(dbCtx, db.CreateExecutionTraceParams{
@@ -194,7 +211,7 @@ func (sm *SessionManager) MaintainHeartbeat(ctx context.Context, userID string, 
 							})
 						}
 
-						sampleCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+						sampleCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 						defer cancel()
 
 						// Phase 10.1: Prevent Double Execution if user is connected from multiple terminals
@@ -309,6 +326,33 @@ func (sm *SessionManager) MaintainHeartbeat(ctx context.Context, userID string, 
 						}
 						llmResponse = sanitizeLLMResponseForStorage(llmResponse)
 
+						// Phase 12.2: Handle State Updates if response is JSON and contains state_update
+						var respObj map[string]interface{}
+						if err := json.Unmarshal([]byte(llmResponse), &respObj); err == nil {
+							if stateUpdate, ok := respObj["state_update"].(map[string]interface{}); ok {
+								// Fetch current state
+								currentState := make(map[string]interface{})
+								sBytes, _ := queries.GetWorkflowState(dbCtx, db.GetWorkflowStateParams{
+									TaskID:      tid,
+									ExecutionID: executionID,
+								})
+								if len(sBytes) > 0 {
+									json.Unmarshal(sBytes, &currentState)
+								}
+								// Merge
+								for k, v := range stateUpdate {
+									currentState[k] = v
+								}
+								newStateBytes, _ := json.Marshal(currentState)
+								queries.UpsertWorkflowState(dbCtx, db.UpsertWorkflowStateParams{
+									TaskID:      tid,
+									ExecutionID: executionID,
+									StateData:   newStateBytes,
+								})
+								log.Printf("Updated workflow state for task %s, execution %s", taskID, executionID)
+							}
+						}
+
 						log.Printf("Received LLM Response for user %s: %s", userID, llmResponse)
 						observeTaskOutcome("execution_success")
 						observeTaskExecutionDuration(executionStart, "success")
@@ -342,6 +386,27 @@ func (sm *SessionManager) MaintainHeartbeat(ctx context.Context, userID string, 
 							Payload:   string(evtPayload),
 						}); err != nil {
 							log.Printf("Error publishing task_executed (success) for %s: %v", taskID, err)
+						}
+
+						// Phase 12.3: Evaluate loop condition
+						if len(t.LoopCondition) > 0 {
+							var loopCond map[string]interface{}
+							if err := json.Unmarshal(t.LoopCondition, &loopCond); err == nil {
+								// Fetch state for evaluation
+								sBytes, _ := queries.GetWorkflowState(dbCtx, db.GetWorkflowStateParams{
+									TaskID:      tid,
+									ExecutionID: executionID,
+								})
+								var stateMap map[string]interface{}
+								json.Unmarshal(sBytes, &stateMap)
+
+								if evaluateWorkflowLoop(loopCond, stateMap) {
+									log.Printf("Loop condition met for task %s, triggering next iteration.", taskID)
+									// Trigger immediate re-run by setting next_run to now and status to active
+									completeTask(dbCtx, userID, taskID, time.Now().UTC(), StatusActive)
+									return
+								}
+							}
 						}
 
 						// Iteration 2: Advance the task status
@@ -389,5 +454,56 @@ func (sm *SessionManager) MaintainHeartbeat(ctx context.Context, userID string, 
 		default:
 			// Continue to outer loop to re-subscribe
 		}
+	}
+}
+
+// evaluateWorkflowLoop compares the loop configuration against the current workflow state
+func evaluateWorkflowLoop(loopCond map[string]interface{}, state map[string]interface{}) bool {
+	enabled, ok := loopCond["enabled"].(bool)
+	if !ok || !enabled {
+		return false
+	}
+
+	variable, _ := loopCond["variable"].(string)
+	operator, _ := loopCond["operator"].(string)
+	targetValue := loopCond["value"]
+
+	stateValue, ok := state[variable]
+	if !ok {
+		return false
+	}
+
+	return compareValues(stateValue, targetValue, operator)
+}
+
+// compareValues handles type-agnostic comparison for workflow conditions
+func compareValues(actual interface{}, target interface{}, operator string) bool {
+	sActual := fmt.Sprintf("%v", actual)
+	sTarget := fmt.Sprintf("%v", target)
+
+	switch operator {
+	case "equals", "==":
+		return sActual == sTarget
+	case "not_equals", "!=":
+		return sActual != sTarget
+	case "contains":
+		return strings.Contains(sActual, sTarget)
+	case "greater_than", ">":
+		fActual, errA := strconv.ParseFloat(sActual, 64)
+		fTarget, errT := strconv.ParseFloat(sTarget, 64)
+		if errA == nil && errT == nil {
+			return fActual > fTarget
+		}
+		return sActual > sTarget
+	case "less_than", "<":
+		fActual, errA := strconv.ParseFloat(sActual, 64)
+		fTarget, errT := strconv.ParseFloat(sTarget, 64)
+		if errA == nil && errT == nil {
+			return fActual < fTarget
+		}
+		return sActual < sTarget
+	default:
+		log.Printf("Unknown comparison operator: %s", operator)
+		return false
 	}
 }

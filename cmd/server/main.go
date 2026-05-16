@@ -25,6 +25,15 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/redis/go-redis/v9"
 	"schedule-mcp/db"
+
+	"go.opentelemetry.io/contrib/instrumentation/github.com/labstack/echo/otelecho"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
+	"go.opentelemetry.io/otel/propagation"
+	"go.opentelemetry.io/otel/sdk/resource"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	semconv "go.opentelemetry.io/otel/semconv/v1.24.0"
+	"github.com/exaring/otelpgx"
 )
 
 func initRedis(redisUrl string) {
@@ -44,6 +53,44 @@ func initRedis(redisUrl string) {
 	log.Println("Connected to Redis")
 }
 
+func initTracer(ctx context.Context) func(context.Context) error {
+	endpoint := os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
+	if endpoint == "" {
+		endpoint = "localhost:4317"
+	}
+
+	exporter, err := otlptracegrpc.New(ctx,
+		otlptracegrpc.WithInsecure(),
+		otlptracegrpc.WithEndpoint(endpoint),
+	)
+	if err != nil {
+		log.Printf("Failed to create OTLP trace exporter: %v", err)
+		return func(context.Context) error { return nil }
+	}
+
+	res, err := resource.New(ctx,
+		resource.WithAttributes(
+			semconv.ServiceNameKey.String("scheduled-actions"),
+			semconv.ServiceVersionKey.String("1.0.0"),
+		),
+	)
+	if err != nil {
+		log.Printf("Failed to create resource: %v", err)
+		return func(context.Context) error { return nil }
+	}
+
+	tp := sdktrace.NewTracerProvider(
+		sdktrace.WithBatcher(exporter),
+		sdktrace.WithResource(res),
+	)
+	otel.SetTracerProvider(tp)
+	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{}))
+
+	return func(ctx context.Context) error {
+		return tp.Shutdown(ctx)
+	}
+}
+
 func main() {
 	hostname, _ := os.Hostname()
 	workerID = fmt.Sprintf("%s-%d", hostname, time.Now().UTC().UnixNano())
@@ -60,13 +107,22 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	shutdownTracer := initTracer(ctx)
+	defer shutdownTracer(ctx)
+
 	// 1. Initialize PostgreSQL Connection Pool
 	dbUrl := os.Getenv("DATABASE_URL")
 	if dbUrl == "" {
 		dbUrl = "postgres://postgres:postgres@localhost:5432/mcp?sslmode=disable"
 	}
 
-	dbPool, err = pgxpool.New(ctx, dbUrl)
+	pgxCfg, err := pgxpool.ParseConfig(dbUrl)
+	if err != nil {
+		log.Fatalf("Unable to parse database URL: %v", err)
+	}
+	pgxCfg.ConnConfig.Tracer = otelpgx.NewTracer()
+
+	dbPool, err = pgxpool.NewWithConfig(ctx, pgxCfg)
 	if err != nil {
 		log.Fatalf("Unable to connect to database: %v", err)
 	}
@@ -121,8 +177,8 @@ func main() {
 	defer RedisClient.Close()
 
 	go func() {
-		SubscribeToEvents(context.Background(), func(event PubSubEvent) {
-			handleSystemEvent(context.Background(), event)
+		SubscribeToEvents(context.Background(), func(ctx context.Context, event PubSubEvent) {
+			handleSystemEvent(ctx, event)
 		})
 	}()
 
@@ -139,6 +195,7 @@ func main() {
 	e := echo.New()
 
 	// Standard Echo Middleware
+	e.Use(otelecho.Middleware("scheduled-actions"))
 	//lint:ignore SA1019 simple logger is sufficient
 	e.Use(middleware.Logger())
 	e.Use(middleware.Recover())
@@ -223,6 +280,8 @@ func main() {
 	api.DELETE("/tasks/:id", apiDeleteTaskHandler)
 	api.PATCH("/tasks/:id", apiUpdateTaskHandler)
 	api.GET("/tasks/:id/versions", apiListTaskVersionsHandler)
+	api.GET("/tasks/:id/executions", apiListTaskExecutionsHandler)
+	api.GET("/tasks/:id/traces/:execution_id", apiGetExecutionTracesHandler)
 	api.POST("/tasks/:id/restore/:version_id", apiRestoreTaskVersionHandler)
 	api.POST("/tasks/:id/approve", apiApproveTaskHandler)
 	api.POST("/tasks/:id/deny", apiDenyTaskHandler)

@@ -34,6 +34,19 @@ func TestExecuteNativeJS(t *testing.T) {
 			want:    "",
 			wantErr: true,
 		},
+		{
+			name:    "timeout",
+			code:    "while(true) {}",
+			input:   nil,
+			want:    "",
+			wantErr: true,
+		},
+		{
+			name:  "es6 features",
+			code:  "const x = (a, b) => `${a} ${b}`; x('hello', 'world')",
+			input: nil,
+			want:  "hello world",
+		},
 	}
 
 	for _, tt := range tests {

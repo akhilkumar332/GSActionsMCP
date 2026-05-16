@@ -273,8 +273,18 @@ INSERT INTO execution_traces (task_id, execution_id, worker_id, step_name, input
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 RETURNING *;
 
--- name: ListTaskTraces :many
-SELECT * FROM execution_traces WHERE task_id = $1 ORDER BY start_time DESC;
+-- name: ListExecutionTracesByExecutionID :many
+SELECT * FROM execution_traces 
+WHERE task_id = $1 AND execution_id = $2 
+ORDER BY start_time ASC;
+
+-- name: ListTaskExecutionIDs :many
+SELECT DISTINCT execution_id, MAX(start_time) as last_activity
+FROM execution_traces
+WHERE task_id = $1
+GROUP BY execution_id
+ORDER BY last_activity DESC
+LIMIT 20;
 
 -- name: GetTaskOutput :one
 SELECT output_data 
@@ -393,3 +403,16 @@ SELECT e.name, e.value
 FROM workspace_env_vars e
 JOIN tasks t ON e.workspace_id = t.workspace_id
 WHERE t.id = $1;
+
+-- name: UpsertWorkflowState :exec
+INSERT INTO workflow_state (task_id, execution_id, state_data, updated_at)
+VALUES ($1, $2, $3, NOW())
+ON CONFLICT (task_id, execution_id) DO UPDATE SET
+    state_data = EXCLUDED.state_data,
+    updated_at = NOW();
+
+-- name: GetWorkflowState :one
+SELECT state_data FROM workflow_state WHERE task_id = $1 AND execution_id = $2;
+
+-- name: GetLatestWorkflowState :one
+SELECT state_data FROM workflow_state WHERE task_id = $1 ORDER BY updated_at DESC LIMIT 1;
