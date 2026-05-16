@@ -1,3 +1,5 @@
 .gocache/
 .superpowers/
+.GEMINI.md
+docs/
 server
