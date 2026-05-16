@@ -176,7 +176,9 @@ func main() {
 	initRedis(cfg.RedisURL)
 	defer RedisClient.Close()
 
+	workerWG.Add(1)
 	go func() {
+		defer workerWG.Done()
 		SubscribeToEvents(context.Background(), func(ctx context.Context, event PubSubEvent) {
 			handleSystemEvent(ctx, event)
 		})
@@ -267,7 +269,7 @@ func main() {
 	v1.POST("/webhooks/inbound/:token", handleInboundWebhook)
 
 	// Protected API Handlers (v1)
-	api := v1.Group("", csrfMiddleware, EchoSessionMiddleware)
+	api := v1.Group("", csrfMiddleware, EchoSessionMiddleware, EchoRateLimitMiddleware)
 	api.GET("/dashboard", apiDashboardHandler)
 	api.POST("/rotate-api-key", apiRotateAPIKeyHandler)
 	api.GET("/tasks", apiListTasksHandler)

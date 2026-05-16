@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"net/http"
 	"time"
 
@@ -71,24 +72,44 @@ func handleGetTrends(c echo.Context) error {
 
 	// 1. Total Tasks Trends (Current 30d vs Previous 30d)
 	var currentTasks, prevTasks int64
-	_ = dbPool.QueryRow(ctx, "SELECT COUNT(*) FROM execution_traces WHERE start_time > NOW() - INTERVAL '30 days'").Scan(&currentTasks)
-	_ = dbPool.QueryRow(ctx, "SELECT COUNT(*) FROM execution_traces WHERE start_time > NOW() - INTERVAL '60 days' AND start_time <= NOW() - INTERVAL '30 days'").Scan(&prevTasks)
+	err := dbPool.QueryRow(ctx, "SELECT COUNT(*) FROM execution_traces WHERE start_time > NOW() - INTERVAL '30 days'").Scan(&currentTasks)
+	if err != nil {
+		log.Printf("Trends: failed to fetch current tasks: %v", err)
+	}
+	err = dbPool.QueryRow(ctx, "SELECT COUNT(*) FROM execution_traces WHERE start_time > NOW() - INTERVAL '60 days' AND start_time <= NOW() - INTERVAL '30 days'").Scan(&prevTasks)
+	if err != nil {
+		log.Printf("Trends: failed to fetch prev tasks: %v", err)
+	}
 
 	// 2. Success Rate Trends
 	var currentSuccess, prevSuccess float64
-	_ = dbPool.QueryRow(ctx, `
+	err = dbPool.QueryRow(ctx, `
 		SELECT COALESCE((COUNT(*) FILTER (WHERE is_error = FALSE)::float / NULLIF(COUNT(*), 0)::float) * 100, 100)
 		FROM execution_traces WHERE start_time > NOW() - INTERVAL '30 days'
 	`).Scan(&currentSuccess)
-	_ = dbPool.QueryRow(ctx, `
+	if err != nil {
+		log.Printf("Trends: failed to fetch current success: %v", err)
+		currentSuccess = 100.0
+	}
+	err = dbPool.QueryRow(ctx, `
 		SELECT COALESCE((COUNT(*) FILTER (WHERE is_error = FALSE)::float / NULLIF(COUNT(*), 0)::float) * 100, 100)
 		FROM execution_traces WHERE start_time > NOW() - INTERVAL '60 days' AND start_time <= NOW() - INTERVAL '30 days'
 	`).Scan(&prevSuccess)
+	if err != nil {
+		log.Printf("Trends: failed to fetch prev success: %v", err)
+		prevSuccess = 100.0
+	}
 
 	// 3. User Growth
 	var currentUsers, prevUsers int64
-	_ = dbPool.QueryRow(ctx, "SELECT COUNT(*) FROM users WHERE created_at > NOW() - INTERVAL '30 days'").Scan(&currentUsers)
-	_ = dbPool.QueryRow(ctx, "SELECT COUNT(*) FROM users WHERE created_at > NOW() - INTERVAL '60 days' AND created_at <= NOW() - INTERVAL '30 days'").Scan(&prevUsers)
+	err = dbPool.QueryRow(ctx, "SELECT COUNT(*) FROM users WHERE created_at > NOW() - INTERVAL '30 days'").Scan(&currentUsers)
+	if err != nil {
+		log.Printf("Trends: failed to fetch current users: %v", err)
+	}
+	err = dbPool.QueryRow(ctx, "SELECT COUNT(*) FROM users WHERE created_at > NOW() - INTERVAL '60 days' AND created_at <= NOW() - INTERVAL '30 days'").Scan(&prevUsers)
+	if err != nil {
+		log.Printf("Trends: failed to fetch prev users: %v", err)
+	}
 
 	calcGrowth := func(curr, prev float64) string {
 		if prev == 0 {

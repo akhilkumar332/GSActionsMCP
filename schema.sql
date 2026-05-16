@@ -283,6 +283,7 @@ CREATE TABLE task_versions (
     task_type TEXT NOT NULL,
     native_code TEXT,
     branch_condition JSONB,
+    loop_condition JSONB,
     is_bundle_root BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );

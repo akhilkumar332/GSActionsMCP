@@ -128,6 +128,19 @@ func EchoAuthMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
 	}
 }
 
+// EchoRateLimitMiddleware applies the global rate limiter based on the user ID in context
+func EchoRateLimitMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
+	return func(c echo.Context) error {
+		userID := getUserID(c)
+		if userID != "" {
+			if !globalRateLimiter.Allow(c.Request().Context(), userID) {
+				return c.JSON(http.StatusTooManyRequests, APIResponse{Success: false, Error: "Too Many Requests"})
+			}
+		}
+		return next(c)
+	}
+}
+
 func getUserFromEcho(c echo.Context) *User {
 	user, _ := c.Get("user").(*User)
 	return user
