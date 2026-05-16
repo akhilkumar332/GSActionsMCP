@@ -210,13 +210,15 @@ func main() {
 		csrfKey = defaultCSRFKey // non-production fallback
 	}
 	useSecure := cfg.secureCookies()
+	trustedOrigins := cfg.csrfTrustedOrigins()
+	log.Printf("CSRF Protection enabled. Trusted Origins: %v", trustedOrigins)
 
 	csrfMiddleware := echo.WrapMiddleware(csrf.Protect(
 		[]byte(csrfKey),
 		csrf.Secure(useSecure),
 		csrf.SameSite(csrf.SameSiteLaxMode),
 		csrf.Path("/"),
-		csrf.TrustedOrigins(cfg.csrfTrustedOrigins()),
+		csrf.TrustedOrigins(trustedOrigins),
 		csrf.ErrorHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			log.Printf("CSRF Failure for %s %s: %v", r.Method, r.URL.Path, csrf.FailureReason(r))
 			log.Printf("CSRF Debug - Origin: %q, Referer: %q, Host: %q", r.Header.Get("Origin"), r.Header.Get("Referer"), r.Host)

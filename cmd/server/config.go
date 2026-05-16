@@ -3,6 +3,8 @@ package main
 import (
 	"encoding/hex"
 	"fmt"
+	"log"
+	"net"
 	"net/url"
 	"os"
 	"strconv"
@@ -108,6 +110,26 @@ func (c runtimeConfig) csrfTrustedOrigins() []string {
 		"https://localhost",
 	}
 
+	// In local dev, automatically trust all local network interfaces
+	if c.LocalDev {
+		addrs, err := net.InterfaceAddrs()
+		if err == nil {
+			for _, addr := range addrs {
+				if ipnet, ok := addr.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
+					if ipnet.IP.To4() != nil {
+						ip := ipnet.IP.String()
+						origins = append(origins, "http://"+ip)
+						origins = append(origins, "https://"+ip)
+						origins = append(origins, "http://"+ip+":8080")
+						origins = append(origins, "https://"+ip+":8080")
+					}
+				}
+			}
+		} else {
+			log.Printf("Warning: failed to fetch local network interfaces for CSRF trust: %v", err)
+		}
+	}
+
 	// Add from environment variable
 	if extra := os.Getenv("CSRF_TRUSTED_ORIGINS"); extra != "" {
 		for _, o := range strings.Split(extra, ",") {
@@ -124,31 +146,34 @@ func (c runtimeConfig) csrfTrustedOrigins() []string {
 		}
 	}
 
-	if c.BaseURL == "" {
-		return origins
-	}
-	parsed, err := url.Parse(c.BaseURL)
-	if err != nil || parsed.Host == "" {
-		return origins
-	}
+	if c.BaseURL != "" {
+		parsed, err := url.Parse(c.BaseURL)
+		if err == nil && parsed.Host != "" {
+			// Always add the BaseURL as-is
+			origins = append(origins, c.BaseURL)
 
-	// Always add the BaseURL as-is
-	origins = append(origins, c.BaseURL)
+			// Also add variants
+			hostWithPort := parsed.Host
+			hostOnly := parsed.Hostname()
 
-	// Also add variants if it's missing scheme or has different scheme
-	hostOnly := parsed.Hostname()
-	hostWithPort := parsed.Host
-
-	if !strings.HasPrefix(c.BaseURL, "http://") {
-		origins = append(origins, "http://"+hostWithPort)
-		origins = append(origins, "http://"+hostOnly)
-	}
-	if !strings.HasPrefix(c.BaseURL, "https://") {
-		origins = append(origins, "https://"+hostWithPort)
-		origins = append(origins, "https://"+hostOnly)
+			origins = append(origins, "http://"+hostWithPort)
+			origins = append(origins, "https://"+hostWithPort)
+			origins = append(origins, "http://"+hostOnly)
+			origins = append(origins, "https://"+hostOnly)
+		}
 	}
 
-	return origins
+	// Deduplicate
+	unique := make(map[string]bool)
+	var result []string
+	for _, o := range origins {
+		if !unique[o] {
+			unique[o] = true
+			result = append(result, o)
+		}
+	}
+
+	return result
 }
 
 func envBool(name string, fallback bool) bool {
