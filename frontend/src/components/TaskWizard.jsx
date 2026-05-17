@@ -20,16 +20,24 @@ const TaskWizard = ({ isOpen, onClose, onTaskCreated, initialData, isInline = fa
   const parseJSONField = (field, defaultValue) => {
     if (!field) return defaultValue;
     if (typeof field === 'object') return field;
+    
+    const strField = String(field);
+    
+    // Try Base64 (common for Go []byte fields)
     try {
-      // Handle Base64 from Go []byte
-      return JSON.parse(atob(field));
-    } catch {
-      try {
-        // Handle raw JSON string
-        return JSON.parse(field);
-      } catch {
-        return defaultValue;
+      const decoded = atob(strField);
+      if (decoded.startsWith('{') || decoded.startsWith('[')) {
+        return JSON.parse(decoded);
       }
+    } catch {
+      // Not Base64 or not JSON decoded
+    }
+
+    // Try raw JSON string
+    try {
+      return JSON.parse(strField);
+    } catch {
+      return defaultValue;
     }
   };
 

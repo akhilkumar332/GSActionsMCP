@@ -3,10 +3,12 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
@@ -85,7 +87,10 @@ func (sm *SessionManager) MaintainHeartbeat(ctx context.Context, userID string, 
 
 	// Check per-user connection limit (max 10 connections)
 	connCountKey := fmt.Sprintf("conn_count:%s", userID)
-	count, _ := sm.redisClient.Incr(ctx, connCountKey).Result()
+	count, err := sm.redisClient.Incr(ctx, connCountKey).Result()
+	if err != nil {
+		log.Printf("Error incrementing connection count for user %s: %v", userID, err)
+	}
 	sm.redisClient.Expire(ctx, connCountKey, 1*time.Minute)
 
 	defer func() {
@@ -170,7 +175,11 @@ func (sm *SessionManager) MaintainHeartbeat(ctx context.Context, userID string, 
 						}
 
 						// Extract trace context
-						traceMap, _ := taskData["trace_context"].(map[string]interface{})
+						var traceMap map[string]interface{}
+						if tm, ok := taskData["trace_context"].(map[string]interface{}); ok {
+							traceMap = tm
+						}
+
 						carrier := propagation.MapCarrier{}
 						for k, v := range traceMap {
 							if s, ok := v.(string); ok {
@@ -189,6 +198,11 @@ func (sm *SessionManager) MaintainHeartbeat(ctx context.Context, userID string, 
 						prompt, _ := taskData["prompt"].(string)
 						executionID, _ := taskData["execution_id"].(string)
 
+						if taskID == "" || prompt == "" || executionID == "" {
+							log.Printf("Missing critical fields in Pub/Sub payload for user %s: %+v", userID, taskData)
+							return
+						}
+
 						span.SetAttributes(
 							attribute.String("task_id", taskID),
 							attribute.String("execution_id", executionID),
@@ -198,9 +212,9 @@ func (sm *SessionManager) MaintainHeartbeat(ctx context.Context, userID string, 
 						triggerConfigStr, _ := taskData["trigger_config"].(string)
 						triggerPayload, _ := taskData["trigger_payload"].(map[string]interface{})
 
-						if taskID == "" || prompt == "" || executionID == "" || triggerType == "" || triggerConfigStr == "" {
-							err := fmt.Errorf("incomplete Pub/Sub payload")
-							log.Printf("Incomplete Pub/Sub payload for user %s: %+v", userID, taskData)
+						if triggerType == "" || triggerConfigStr == "" {
+							err := fmt.Errorf("incomplete trigger data in Pub/Sub payload")
+							log.Printf("Incomplete trigger data for user %s: %+v", userID, taskData)
 							span.RecordError(err)
 							span.SetStatus(codes.Error, err.Error())
 							return
@@ -240,11 +254,15 @@ func (sm *SessionManager) MaintainHeartbeat(ctx context.Context, userID string, 
 							// 1. Get output of parent task
 							parentOutput := ""
 							if t.DependsOnTaskID.Valid {
-								outBytes, _ := queries.GetTaskOutput(dbCtx, db.GetTaskOutputParams{
+								outBytes, err := queries.GetTaskOutput(dbCtx, db.GetTaskOutputParams{
 									TaskID: t.DependsOnTaskID,
 									UserID: userID,
 								})
-								parentOutput = outBytes.String
+								if err != nil {
+									log.Printf("Error fetching parent output for task %s: %v", taskID, err)
+								} else {
+									parentOutput = outBytes.String
+								}
 							}
 
 							if t.TaskType.String == TaskTypeSwarmRouter {
@@ -350,7 +368,7 @@ func (sm *SessionManager) MaintainHeartbeat(ctx context.Context, userID string, 
 							}
 
 							// Emit Redis event
-							evtPayload, _ := json.Marshal(map[string]interface{}{
+							evtPayload, err := json.Marshal(map[string]interface{}{
 								"id":               formatUUID(logID),
 								"task_id":          taskID,
 								"status":           "failure",
@@ -361,12 +379,16 @@ func (sm *SessionManager) MaintainHeartbeat(ctx context.Context, userID string, 
 								"secrets_injected": secretCount,
 								"chained":          chained,
 							})
-							if err := PublishEvent(dbCtx, PubSubEvent{
-								UserID:    userID,
-								EventType: "task_executed",
-								Payload:   string(evtPayload),
-							}); err != nil {
-								log.Printf("Error publishing task_executed (failure) for %s: %v", taskID, err)
+							if err != nil {
+								log.Printf("Error marshaling failure event for %s: %v", taskID, err)
+							} else {
+								if err := PublishEvent(dbCtx, PubSubEvent{
+									UserID:    userID,
+									EventType: "task_executed",
+									Payload:   string(evtPayload),
+								}); err != nil {
+									log.Printf("Error publishing task_executed (failure) for %s: %v", taskID, err)
+								}
 							}
 
 							// Increment failure count securely
@@ -404,8 +426,12 @@ func (sm *SessionManager) MaintainHeartbeat(ctx context.Context, userID string, 
 						llmResponse := "No response provided by LLM"
 						if res != nil {
 							// Convert response to JSON string for the log
-							resBytes, _ := json.Marshal(res)
-							llmResponse = string(resBytes)
+							resBytes, err := json.Marshal(res)
+							if err != nil {
+								log.Printf("Error marshaling LLM response for %s: %v", taskID, err)
+							} else {
+								llmResponse = string(resBytes)
+							}
 						}
 						llmResponse = sanitizeLLMResponseForStorage(llmResponse)
 
@@ -415,10 +441,14 @@ func (sm *SessionManager) MaintainHeartbeat(ctx context.Context, userID string, 
 							if stateUpdate, ok := respObj["state_update"].(map[string]interface{}); ok {
 								// Fetch current state
 								currentState := make(map[string]interface{})
-								sBytes, _ := queries.GetWorkflowState(dbCtx, db.GetWorkflowStateParams{
+								sBytes, err := queries.GetWorkflowState(dbCtx, db.GetWorkflowStateParams{
 									TaskID:      tid,
 									ExecutionID: executionID,
 								})
+								if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+									log.Printf("Error fetching workflow state for %s: %v", taskID, err)
+								}
+
 								if len(sBytes) > 0 {
 									json.Unmarshal(sBytes, &currentState)
 								}
@@ -426,13 +456,17 @@ func (sm *SessionManager) MaintainHeartbeat(ctx context.Context, userID string, 
 								for k, v := range stateUpdate {
 									currentState[k] = v
 								}
-								newStateBytes, _ := json.Marshal(currentState)
-								queries.UpsertWorkflowState(dbCtx, db.UpsertWorkflowStateParams{
-									TaskID:      tid,
-									ExecutionID: executionID,
-									StateData:   newStateBytes,
-								})
-								log.Printf("Updated workflow state for task %s, execution %s", taskID, executionID)
+								newStateBytes, err := json.Marshal(currentState)
+								if err != nil {
+									log.Printf("Error marshaling new state for %s: %v", taskID, err)
+								} else {
+									queries.UpsertWorkflowState(dbCtx, db.UpsertWorkflowStateParams{
+										TaskID:      tid,
+										ExecutionID: executionID,
+										StateData:   newStateBytes,
+									})
+									log.Printf("Updated workflow state for task %s, execution %s", taskID, executionID)
+								}
 							}
 						}
 
@@ -462,7 +496,7 @@ func (sm *SessionManager) MaintainHeartbeat(ctx context.Context, userID string, 
 						}
 
 						// Emit Redis event
-						evtPayload, _ := json.Marshal(map[string]interface{}{
+						evtPayload, err := json.Marshal(map[string]interface{}{
 							"id":               formatUUID(logID),
 							"task_id":          taskID,
 							"status":           "success",
@@ -473,23 +507,33 @@ func (sm *SessionManager) MaintainHeartbeat(ctx context.Context, userID string, 
 							"secrets_injected": secretCount,
 							"chained":          chained,
 						})
-						if err := PublishEvent(dbCtx, PubSubEvent{
-							UserID:    userID,
-							EventType: "task_executed",
-							Payload:   string(evtPayload),
-						}); err != nil {
-							log.Printf("Error publishing task_executed (success) for %s: %v", taskID, err)
+						if err != nil {
+							log.Printf("Error marshaling success event for %s: %v", taskID, err)
+						} else {
+							if err := PublishEvent(dbCtx, PubSubEvent{
+								UserID:    userID,
+								EventType: "task_executed",
+								Payload:   string(evtPayload),
+							}); err != nil {
+								log.Printf("Error publishing task_executed (success) for %s: %v", taskID, err)
+							}
 						}
 
 						// Phase 12.3: Evaluate loop condition
 						if len(t.LoopCondition) > 0 {
 							// Fetch state for evaluation
-							sBytes, _ := queries.GetWorkflowState(dbCtx, db.GetWorkflowStateParams{
+							sBytes, err := queries.GetWorkflowState(dbCtx, db.GetWorkflowStateParams{
 								TaskID:      tid,
 								ExecutionID: executionID,
 							})
+							if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+								log.Printf("Error fetching workflow state for loop eval %s: %v", taskID, err)
+							}
+							
 							var stateMap map[string]interface{}
-							json.Unmarshal(sBytes, &stateMap)
+							if len(sBytes) > 0 {
+								json.Unmarshal(sBytes, &stateMap)
+							}
 
 							if evaluateWorkflowLoop(t.LoopCondition, stateMap) {
 								log.Printf("Loop condition met for task %s, triggering next iteration.", taskID)

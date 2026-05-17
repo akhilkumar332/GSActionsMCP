@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -167,14 +168,19 @@ func handleDispatchTask(workerCtx context.Context, t db.Task, triggerPayload map
 
 	// Load workflow state if it exists (try latest state for this task)
 	var state map[string]interface{}
-	stateBytes, _ := queries.GetLatestWorkflowState(workerCtx, t.ID)
+	stateBytes, err := queries.GetLatestWorkflowState(workerCtx, t.ID)
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		log.Printf("Error fetching workflow state for dispatch %s: %v", taskID, err)
+	}
 	if len(stateBytes) > 0 {
 		json.Unmarshal(stateBytes, &state)
 	}
 
-	userEmail, _ := queries.GetUserEmail(workerCtx, t.UserID)
+	userEmail, err := queries.GetUserEmail(workerCtx, t.UserID)
 	emailStr := ""
-	if userEmail.Valid {
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		log.Printf("Error fetching user email for dispatch %s: %v", taskID, err)
+	} else if userEmail.Valid {
 		emailStr = userEmail.String
 	}
 
@@ -190,17 +196,21 @@ func handleDispatchTask(workerCtx context.Context, t db.Task, triggerPayload map
 			log.Printf("Error updating task approval status for %s: %v", taskID, err)
 		}
 
-		evtPayload, _ := json.Marshal(map[string]interface{}{
+		evtPayload, err := json.Marshal(map[string]interface{}{
 			"task_id":      taskID,
 			"task_name":    t.Name,
 			"execution_id": executionID,
 		})
-		if err := PublishEvent(workerCtx, PubSubEvent{
-			UserID:    t.UserID,
-			EventType: "approval_required",
-			Payload:   string(evtPayload),
-		}); err != nil {
-			log.Printf("Error publishing approval_required event for %s: %v", taskID, err)
+		if err != nil {
+			log.Printf("Error marshaling approval_required event for %s: %v", taskID, err)
+		} else {
+			if err := PublishEvent(workerCtx, PubSubEvent{
+				UserID:    t.UserID,
+				EventType: "approval_required",
+				Payload:   string(evtPayload),
+			}); err != nil {
+				log.Printf("Error publishing approval_required event for %s: %v", taskID, err)
+			}
 		}
 		return
 	}
@@ -218,7 +228,7 @@ func handleDispatchTask(workerCtx context.Context, t db.Task, triggerPayload map
 			log.Printf("Error creating task log for %s (missed): %v", taskID, err)
 		}
 
-		evtPayload, _ := json.Marshal(map[string]interface{}{
+		evtPayload, err := json.Marshal(map[string]interface{}{
 			"id":             formatUUID(logID),
 			"task_id":        taskID,
 			"status":         "missed",
@@ -228,12 +238,16 @@ func handleDispatchTask(workerCtx context.Context, t db.Task, triggerPayload map
 			"error_message":  "user offline",
 			"execution_id":   executionID,
 		})
-		if err := PublishEvent(workerCtx, PubSubEvent{
-			UserID:    t.UserID,
-			EventType: "task_executed",
-			Payload:   string(evtPayload),
-		}); err != nil {
-			log.Printf("Error publishing task_executed event for %s (missed): %v", taskID, err)
+		if err != nil {
+			log.Printf("Error marshaling missed task event for %s: %v", taskID, err)
+		} else {
+			if err := PublishEvent(workerCtx, PubSubEvent{
+				UserID:    t.UserID,
+				EventType: "task_executed",
+				Payload:   string(evtPayload),
+			}); err != nil {
+				log.Printf("Error publishing task_executed event for %s (missed): %v", taskID, err)
+			}
 		}
 
 		if t.MissedTaskPolicy.String == PolicyRunImmediate {
@@ -275,7 +289,10 @@ func handleDispatchTask(workerCtx context.Context, t db.Task, triggerPayload map
 			"payload":      triggerPayload,
 		}
 
-		inputJSON, _ := json.Marshal(inputMap)
+		inputJSON, err := json.Marshal(inputMap)
+		if err != nil {
+			log.Printf("Error marshaling native input for %s: %v", taskID, err)
+		}
 		if _, err := queries.CreateExecutionTrace(workerCtx, db.CreateExecutionTraceParams{
 			TaskID:      t.ID,
 			ExecutionID: executionID,
@@ -301,7 +318,7 @@ func handleDispatchTask(workerCtx context.Context, t db.Task, triggerPayload map
 				log.Printf("Error creating task log for %s (failure): %v", taskID, logErr)
 			}
 
-			evtPayload, _ := json.Marshal(map[string]interface{}{
+			evtPayload, err := json.Marshal(map[string]interface{}{
 				"id":             formatUUID(logID),
 				"task_id":        taskID,
 				"status":         "failure",
@@ -311,12 +328,16 @@ func handleDispatchTask(workerCtx context.Context, t db.Task, triggerPayload map
 				"error_message":  err.Error(),
 				"execution_id":   executionID,
 			})
-			if err := PublishEvent(workerCtx, PubSubEvent{
-				UserID:    t.UserID,
-				EventType: "task_executed",
-				Payload:   string(evtPayload),
-			}); err != nil {
-				log.Printf("Error publishing task_executed event for %s (failure): %v", taskID, err)
+			if err != nil {
+				log.Printf("Error marshaling native failure event for %s: %v", taskID, err)
+			} else {
+				if err := PublishEvent(workerCtx, PubSubEvent{
+					UserID:    t.UserID,
+					EventType: "task_executed",
+					Payload:   string(evtPayload),
+				}); err != nil {
+					log.Printf("Error publishing task_executed event for %s (failure): %v", taskID, err)
+				}
 			}
 
 			if _, err := queries.CreateExecutionTrace(workerCtx, db.CreateExecutionTraceParams{
@@ -384,7 +405,7 @@ func handleDispatchTask(workerCtx context.Context, t db.Task, triggerPayload map
 				log.Printf("Error creating task log for %s (success): %v", taskID, err)
 			}
 
-			evtPayload, _ := json.Marshal(map[string]interface{}{
+			evtPayload, err := json.Marshal(map[string]interface{}{
 				"id":             formatUUID(logID),
 				"task_id":        taskID,
 				"status":         "success",
@@ -394,12 +415,16 @@ func handleDispatchTask(workerCtx context.Context, t db.Task, triggerPayload map
 				"llm_response":   result,
 				"execution_id":   executionID,
 			})
-			if err := PublishEvent(workerCtx, PubSubEvent{
-				UserID:    t.UserID,
-				EventType: "task_executed",
-				Payload:   string(evtPayload),
-			}); err != nil {
-				log.Printf("Error publishing task_executed event for %s (success): %v", taskID, err)
+			if err != nil {
+				log.Printf("Error marshaling native success event for %s: %v", taskID, err)
+			} else {
+				if err := PublishEvent(workerCtx, PubSubEvent{
+					UserID:    t.UserID,
+					EventType: "task_executed",
+					Payload:   string(evtPayload),
+				}); err != nil {
+					log.Printf("Error publishing task_executed event for %s (success): %v", taskID, err)
+				}
 			}
 
 			if _, err := queries.CreateExecutionTrace(workerCtx, db.CreateExecutionTraceParams{
@@ -415,12 +440,18 @@ func handleDispatchTask(workerCtx context.Context, t db.Task, triggerPayload map
 			// Evaluate loop condition for native actions
 			if len(t.LoopCondition) > 0 {
 				// Fetch state for evaluation (state was updated by executeNativeJS)
-				sBytes, _ := queries.GetWorkflowState(workerCtx, db.GetWorkflowStateParams{
+				sBytes, err := queries.GetWorkflowState(workerCtx, db.GetWorkflowStateParams{
 					TaskID:      t.ID,
 					ExecutionID: executionID,
 				})
+				if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+					log.Printf("Error fetching workflow state for native loop eval %s: %v", taskID, err)
+				}
+				
 				var stateMap map[string]interface{}
-				json.Unmarshal(sBytes, &stateMap)
+				if len(sBytes) > 0 {
+					json.Unmarshal(sBytes, &stateMap)
+				}
 
 				if evaluateWorkflowLoop(t.LoopCondition, stateMap) {
 					log.Printf("Loop condition met for native task %s, triggering next iteration.", taskID)
@@ -473,7 +504,11 @@ func handleDispatchTask(workerCtx context.Context, t db.Task, triggerPayload map
 		payloadMap["trigger_payload"] = triggerPayload
 	}
 
-	payloadBytes, _ := json.Marshal(payloadMap)
+	payloadBytes, err := json.Marshal(payloadMap)
+	if err != nil {
+		log.Printf("Error marshaling task trigger payload for %s: %v", taskID, err)
+		return
+	}
 	subscribers, err := RedisClient.Publish(workerCtx, fmt.Sprintf("trigger_task:%s", t.UserID), string(payloadBytes)).Result()
 	if err != nil || subscribers == 0 {
 		observeTaskOutcome("delivery_failure")
@@ -504,7 +539,7 @@ func handleDispatchTask(workerCtx context.Context, t db.Task, triggerPayload map
 			log.Printf("Error creating task log for %s (failure): %v", taskID, logErr)
 		}
 
-		evtPayload, _ := json.Marshal(map[string]interface{}{
+		evtPayload, err := json.Marshal(map[string]interface{}{
 			"id":             formatUUID(logID),
 			"task_id":        taskID,
 			"status":         "failure",
@@ -513,12 +548,16 @@ func handleDispatchTask(workerCtx context.Context, t db.Task, triggerPayload map
 			"user_email":     emailStr,
 			"error_message":  err.Error(),
 		})
-		if err := PublishEvent(workerCtx, PubSubEvent{
-			UserID:    t.UserID,
-			EventType: "task_executed",
-			Payload:   string(evtPayload),
-		}); err != nil {
-			log.Printf("Error publishing task_executed event for %s (failure): %v", taskID, err)
+		if err != nil {
+			log.Printf("Error marshaling delivery failure event for %s: %v", taskID, err)
+		} else {
+			if err := PublishEvent(workerCtx, PubSubEvent{
+				UserID:    t.UserID,
+				EventType: "task_executed",
+				Payload:   string(evtPayload),
+			}); err != nil {
+				log.Printf("Error publishing task_executed event for %s (failure): %v", taskID, err)
+			}
 		}
 
 		retryCount := t.RetryCount.Int32 + 1
@@ -593,7 +632,7 @@ func handleDispatchTask(workerCtx context.Context, t db.Task, triggerPayload map
 		log.Printf("Error creating task log for %s (delivered): %v", taskID, err)
 	}
 
-	evtPayload, _ := json.Marshal(map[string]interface{}{
+	evtPayload, err := json.Marshal(map[string]interface{}{
 		"id":             formatUUID(logID),
 		"task_id":        taskID,
 		"status":         "success",
@@ -602,12 +641,16 @@ func handleDispatchTask(workerCtx context.Context, t db.Task, triggerPayload map
 		"user_email":     emailStr,
 		"llm_response":   "Task delivered to node via Redis",
 	})
-	if err := PublishEvent(workerCtx, PubSubEvent{
-		UserID:    t.UserID,
-		EventType: "task_executed",
-		Payload:   string(evtPayload),
-	}); err != nil {
-		log.Printf("Error publishing task_executed event for %s (delivered): %v", taskID, err)
+	if err != nil {
+		log.Printf("Error marshaling delivery success event for %s: %v", taskID, err)
+	} else {
+		if err := PublishEvent(workerCtx, PubSubEvent{
+			UserID:    t.UserID,
+			EventType: "task_executed",
+			Payload:   string(evtPayload),
+		}); err != nil {
+			log.Printf("Error publishing task_executed event for %s (delivered): %v", taskID, err)
+		}
 	}
 
 	if _, err := queries.CreateExecutionTrace(workerCtx, db.CreateExecutionTraceParams{

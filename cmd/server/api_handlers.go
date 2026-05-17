@@ -606,7 +606,10 @@ func apiCreateWebhookHandler(c echo.Context) error {
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, APIResponse{Success: false, Error: "Failed to encrypt signing secret"})
 	}
-	eventTypesJSON, _ := json.Marshal(input.EventTypes)
+	eventTypesJSON, err := json.Marshal(input.EventTypes)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, APIResponse{Success: false, Error: "Failed to process event types"})
+	}
 
 	row, err := queries.CreateOutboundWebhook(c.Request().Context(), db.CreateOutboundWebhookParams{
 		UserID:                 user.ID,

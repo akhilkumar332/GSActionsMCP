@@ -117,14 +117,23 @@ const WorkflowCanvas = () => {
         let branchCond = null;
         
         if (task.branch_condition) {
-          try {
-            if (typeof task.branch_condition === 'string') {
-              branchCond = JSON.parse(atob(task.branch_condition));
-            } else {
-              branchCond = task.branch_condition;
+          const rawCond = task.branch_condition;
+          if (typeof rawCond === 'object') {
+            branchCond = rawCond;
+          } else {
+            const strCond = String(rawCond);
+            try {
+              const decoded = atob(strCond);
+              if (decoded.startsWith('{') || decoded.startsWith('[')) {
+                branchCond = JSON.parse(decoded);
+              }
+            } catch { /* ignore */ }
+
+            if (!branchCond) {
+              try {
+                branchCond = JSON.parse(strCond);
+              } catch { /* ignore */ }
             }
-          } catch (e) {
-            console.warn("Failed to parse branch condition", e);
           }
         }
 
