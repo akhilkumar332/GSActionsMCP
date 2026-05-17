@@ -274,7 +274,7 @@ func (sm *SessionManager) MaintainHeartbeat(ctx context.Context, userID string, 
 						}
 
 						// 2. Resolve Prompt (Secrets + Chaining + Webhook Body)
-						if _, err := queries.CreateExecutionTrace(dbCtx, db.CreateExecutionTraceParams{
+						if _, err := queries.CreateExecutionTrace(dbCtx, db.CreateExecutionTraceParams{Metadata: nil, 
 							TaskID:      tid,
 							ExecutionID: executionID,
 							WorkerID:    workerID,
@@ -286,7 +286,7 @@ func (sm *SessionManager) MaintainHeartbeat(ctx context.Context, userID string, 
 						finalPrompt, secretCount, chained, err := resolvePrompt(dbCtx, userID, tid, executionID, prompt, t.DependsOnTaskID, triggerPayload)
 						if err != nil {
 							log.Printf("Prompt resolution failed for task %s: %v", taskID, err)
-							if _, err := queries.CreateExecutionTrace(dbCtx, db.CreateExecutionTraceParams{
+							if _, err := queries.CreateExecutionTrace(dbCtx, db.CreateExecutionTraceParams{Metadata: nil, 
 								TaskID:       tid,
 								ExecutionID:  executionID,
 								WorkerID:     workerID,
@@ -297,7 +297,7 @@ func (sm *SessionManager) MaintainHeartbeat(ctx context.Context, userID string, 
 								log.Printf("Trace error for task %s: %v", taskID, err)
 							}
 						} else {
-							if _, err := queries.CreateExecutionTrace(dbCtx, db.CreateExecutionTraceParams{
+							if _, err := queries.CreateExecutionTrace(dbCtx, db.CreateExecutionTraceParams{Metadata: nil, 
 								TaskID:      tid,
 								ExecutionID: executionID,
 								WorkerID:    workerID,
@@ -318,7 +318,7 @@ func (sm *SessionManager) MaintainHeartbeat(ctx context.Context, userID string, 
 							return
 						}
 
-						if _, err := queries.CreateExecutionTrace(dbCtx, db.CreateExecutionTraceParams{
+						if _, err := queries.CreateExecutionTrace(dbCtx, db.CreateExecutionTraceParams{Metadata: nil, 
 							TaskID:      tid,
 							ExecutionID: executionID,
 							WorkerID:    workerID,
@@ -345,7 +345,7 @@ func (sm *SessionManager) MaintainHeartbeat(ctx context.Context, userID string, 
 							observeTaskExecutionDuration(executionStart, "failure")
 							log.Printf("Pub/Sub Sampling failed for user %s: %v", userID, err)
 
-							if _, err := queries.CreateExecutionTrace(dbCtx, db.CreateExecutionTraceParams{
+							if _, err := queries.CreateExecutionTrace(dbCtx, db.CreateExecutionTraceParams{Metadata: nil, 
 								TaskID:       tid,
 								ExecutionID:  executionID,
 								WorkerID:     workerID,
@@ -474,7 +474,7 @@ func (sm *SessionManager) MaintainHeartbeat(ctx context.Context, userID string, 
 						observeTaskOutcome("execution_success")
 						observeTaskExecutionDuration(executionStart, "success")
 
-						if _, err := queries.CreateExecutionTrace(dbCtx, db.CreateExecutionTraceParams{
+						if _, err := queries.CreateExecutionTrace(dbCtx, db.CreateExecutionTraceParams{Metadata: nil, 
 							TaskID:      tid,
 							ExecutionID: executionID,
 							WorkerID:    workerID,

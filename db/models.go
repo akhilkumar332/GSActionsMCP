@@ -40,6 +40,7 @@ type ExecutionTrace struct {
 	OutputData   pgtype.Text        `json:"output_data"`
 	IsError      pgtype.Bool        `json:"is_error"`
 	ErrorMessage pgtype.Text        `json:"error_message"`
+	Metadata     []byte             `json:"metadata"`
 }
 
 type OutboundWebhook struct {

@@ -209,9 +209,9 @@ func (q *Queries) CreateAuditLog(ctx context.Context, arg CreateAuditLogParams) 
 }
 
 const createExecutionTrace = `-- name: CreateExecutionTrace :one
-INSERT INTO execution_traces (task_id, execution_id, worker_id, step_name, input_data, output_data, is_error, error_message)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-RETURNING id, task_id, execution_id, worker_id, step_name, start_time, end_time, duration_ms, input_data, output_data, is_error, error_message
+INSERT INTO execution_traces (task_id, execution_id, worker_id, step_name, input_data, output_data, is_error, error_message, metadata)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+RETURNING id, task_id, execution_id, worker_id, step_name, start_time, end_time, duration_ms, input_data, output_data, is_error, error_message, metadata
 `
 
 type CreateExecutionTraceParams struct {
@@ -223,6 +223,7 @@ type CreateExecutionTraceParams struct {
 	OutputData   pgtype.Text `json:"output_data"`
 	IsError      pgtype.Bool `json:"is_error"`
 	ErrorMessage pgtype.Text `json:"error_message"`
+	Metadata     []byte      `json:"metadata"`
 }
 
 func (q *Queries) CreateExecutionTrace(ctx context.Context, arg CreateExecutionTraceParams) (ExecutionTrace, error) {
@@ -235,6 +236,7 @@ func (q *Queries) CreateExecutionTrace(ctx context.Context, arg CreateExecutionT
 		arg.OutputData,
 		arg.IsError,
 		arg.ErrorMessage,
+		arg.Metadata,
 	)
 	var i ExecutionTrace
 	err := row.Scan(
@@ -250,6 +252,7 @@ func (q *Queries) CreateExecutionTrace(ctx context.Context, arg CreateExecutionT
 		&i.OutputData,
 		&i.IsError,
 		&i.ErrorMessage,
+		&i.Metadata,
 	)
 	return i, err
 }
@@ -1722,7 +1725,7 @@ func (q *Queries) ListAuditLogs(ctx context.Context, limit int32) ([]AuditLog, e
 }
 
 const listExecutionTracesByExecutionID = `-- name: ListExecutionTracesByExecutionID :many
-SELECT id, task_id, execution_id, worker_id, step_name, start_time, end_time, duration_ms, input_data, output_data, is_error, error_message FROM execution_traces 
+SELECT id, task_id, execution_id, worker_id, step_name, start_time, end_time, duration_ms, input_data, output_data, is_error, error_message, metadata FROM execution_traces 
 WHERE task_id = $1 AND execution_id = $2 
 ORDER BY start_time ASC
 `
@@ -1754,6 +1757,7 @@ func (q *Queries) ListExecutionTracesByExecutionID(ctx context.Context, arg List
 			&i.OutputData,
 			&i.IsError,
 			&i.ErrorMessage,
+			&i.Metadata,
 		); err != nil {
 			return nil, err
 		}

@@ -279,8 +279,8 @@ SELECT EXISTS (
 ) AS has_access;
 
 -- name: CreateExecutionTrace :one
-INSERT INTO execution_traces (task_id, execution_id, worker_id, step_name, input_data, output_data, is_error, error_message)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+INSERT INTO execution_traces (task_id, execution_id, worker_id, step_name, input_data, output_data, is_error, error_message, metadata)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 RETURNING *;
 
 -- name: ListExecutionTracesByExecutionID :many

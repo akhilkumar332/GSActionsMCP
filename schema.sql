@@ -245,7 +245,8 @@ CREATE TABLE execution_traces (
     input_data TEXT,
     output_data TEXT,
     is_error BOOLEAN DEFAULT false,
-    error_message TEXT
+    error_message TEXT,
+    metadata JSONB
 );
 
 -- Inbound Webhooks
