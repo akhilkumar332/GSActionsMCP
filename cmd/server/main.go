@@ -387,6 +387,7 @@ func main() {
 	api.POST("/tasks/:id/restore/:version_id", apiRestoreTaskVersionHandler)
 	api.POST("/tasks/:id/approve", apiApproveTaskHandler)
 	api.POST("/tasks/:id/deny", apiDenyTaskHandler)
+	api.POST("/tasks/:id/route", apiManualRouteHandler)
 	api.GET("/events", apiEventsHandler)
 	api.GET("/secrets", apiListSecretsHandler)
 	api.POST("/secrets", apiUpsertSecretHandler)

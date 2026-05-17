@@ -492,3 +492,89 @@ func apiListTaskExecutionsHandler(c echo.Context) error {
 
 	return c.JSON(http.StatusOK, APIResponse{Success: true, Data: executions})
 }
+
+type ManualRouteRequest struct {
+	TargetTaskID string `json:"target_task_id"`
+}
+
+func apiManualRouteHandler(c echo.Context) error {
+	userID := getUserID(c)
+	if userID == "" {
+		return c.JSON(http.StatusUnauthorized, APIResponse{Success: false, Error: "Unauthorized"})
+	}
+	taskIDStr := c.Param("id")
+	taskID, err := mustParseUUID(c, taskIDStr)
+	if err != nil {
+		return err
+	}
+
+	var req ManualRouteRequest
+	if err := c.Bind(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, APIResponse{Success: false, Error: "Invalid request body"})
+	}
+
+	targetTaskID, err := mustParseUUID(c, req.TargetTaskID)
+	if err != nil {
+		return err
+	}
+
+	// 1. Verify source task ownership and state
+	task, err := queries.GetTaskByID(c.Request().Context(), db.GetTaskByIDParams{
+		ID:     taskID,
+		UserID: userID,
+	})
+	if err != nil {
+		return c.JSON(http.StatusNotFound, APIResponse{Success: false, Error: "Task not found"})
+	}
+
+	if task.LastApprovalStatus.String != "needs_routing" {
+		return c.JSON(http.StatusBadRequest, APIResponse{Success: false, Error: "Task is not in needs_routing state"})
+	}
+
+	// 2. Verify target task ownership and dependency
+	targetTask, err := queries.GetTaskByID(c.Request().Context(), db.GetTaskByIDParams{
+		ID:     targetTaskID,
+		UserID: userID,
+	})
+	if err != nil {
+		return c.JSON(http.StatusNotFound, APIResponse{Success: false, Error: "Target task not found"})
+	}
+
+	if !targetTask.DependsOnTaskID.Valid || formatUUID(targetTask.DependsOnTaskID) != taskIDStr {
+		return c.JSON(http.StatusBadRequest, APIResponse{Success: false, Error: "Target task does not depend on source task"})
+	}
+
+	// 3. Update target task to active and next_run = NOW()
+	err = queries.UpdateTaskNextRun(c.Request().Context(), db.UpdateTaskNextRunParams{
+		Status:  pgtype.Text{String: "active", Valid: true},
+		NextRun: pgtype.Timestamptz{Time: time.Now(), Valid: true},
+		ID:      targetTaskID,
+	})
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, APIResponse{Success: false, Error: "Failed to trigger target task"})
+	}
+
+	// 4. Mark source task as completed (or approved)
+	err = queries.UpdateTaskApprovalStatus(c.Request().Context(), db.UpdateTaskApprovalStatusParams{
+		LastApprovalStatus: pgtype.Text{String: "manual_routed", Valid: true},
+		Status:             pgtype.Text{String: "completed", Valid: true},
+		ID:                 taskID,
+		UserID:             userID,
+	})
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, APIResponse{Success: false, Error: "Failed to update source task"})
+	}
+
+	// Audit Log
+	writeAuditLog(c.Request().Context(), AuditEvent{
+		UserID:       userID,
+		Action:       "task.manual_route",
+		ResourceType: "task",
+		ResourceID:   taskIDStr,
+		Metadata: map[string]interface{}{
+			"target_task_id": req.TargetTaskID,
+		},
+	})
+
+	return c.JSON(http.StatusOK, APIResponse{Success: true, Message: "Task manually routed"})
+}

@@ -15,6 +15,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import axios from 'axios';
 import { Save, RefreshCw, Layers, X, Trash2, Play, Pause, FastForward, Rewind, Activity } from 'lucide-react';
 import DecisionNode from '../components/DecisionNode';
+import ManualRouteModal from '../components/ManualRouteModal';
 
 const nodeTypes = {
   decision: DecisionNode,
@@ -27,6 +28,8 @@ const WorkflowCanvas = () => {
   const [saving, setSaving] = useState(false);
   const [selectedTask, setSelectedTask] = useState(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isManualRouteOpen, setIsManualRouteOpen] = useState(false);
+  const [rawTasks, setRawTasks] = useState([]);
   
   // Playback states
   const [playbackMode, setPlaybackMode] = useState(false);
@@ -132,6 +135,7 @@ const WorkflowCanvas = () => {
       const res = await axios.get('/api/v1/tasks');
       if (res.data.success) {
         const tasksData = res.data.data || [];
+        setRawTasks(tasksData);
         mapTasksToFlow(tasksData);
       }
     } catch (err) {
@@ -365,8 +369,14 @@ const WorkflowCanvas = () => {
   }, [fetchTasks]);
 
   const onNodeClick = useCallback((event, node) => {
-    setSelectedTask(node.data.task);
-    setIsSidebarOpen(true);
+    const task = node.data.task;
+    setSelectedTask(task);
+    
+    if (task.task_type === 'decision_router' && task.last_approval_status === 'needs_routing') {
+      setIsManualRouteOpen(true);
+    } else {
+      setIsSidebarOpen(true);
+    }
   }, []);
 
   const handleDeleteTask = useCallback(async (taskId) => {
@@ -478,6 +488,14 @@ const WorkflowCanvas = () => {
             <Background variant="dots" gap={12} size={1} color="rgba(255, 255, 255, 0.1)" />
           </ReactFlow>
         )}
+
+        <ManualRouteModal 
+          isOpen={isManualRouteOpen}
+          onClose={() => setIsManualRouteOpen(false)}
+          task={selectedTask}
+          tasks={rawTasks}
+          onRouted={fetchTasks}
+        />
 
         {/* Sidebar for editing */}
         <AnimatePresence>
