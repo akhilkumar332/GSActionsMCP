@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 
 /**
- * useSSE - A hook to consume Server-Sent Events with auto-reconnect
+ * useSSE - A hook to consume Server-Sent Events with auto-reconnect and visibility awareness
  * @param {Function} onEvent - Callback function called with parsed event data
  */
 export const useSSE = (onEvent) => {
@@ -10,7 +10,12 @@ export const useSSE = (onEvent) => {
     let reconnectTimeout;
 
     const connect = () => {
-      // console.log('Connecting to SSE...');
+      // Don't connect if page is not visible
+      if (document.visibilityState !== 'visible') return;
+
+      // Close existing if any
+      if (eventSource) eventSource.close();
+
       eventSource = new EventSource('/sse', { withCredentials: true });
 
       eventSource.onmessage = (event) => {
@@ -26,8 +31,10 @@ export const useSSE = (onEvent) => {
         console.error('SSE connection error:', err);
         eventSource.close();
         
-        // Simple reconnect with 3 second delay
-        reconnectTimeout = setTimeout(connect, 3000);
+        // Simple reconnect with 3 second delay if still visible
+        if (document.visibilityState === 'visible') {
+          reconnectTimeout = setTimeout(connect, 3000);
+        }
       };
 
       eventSource.onopen = () => {
@@ -35,9 +42,25 @@ export const useSSE = (onEvent) => {
       };
     };
 
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        connect();
+      } else {
+        if (eventSource) {
+          eventSource.close();
+          eventSource = null;
+        }
+        if (reconnectTimeout) {
+          clearTimeout(reconnectTimeout);
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
     connect();
 
     return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
       if (eventSource) {
         eventSource.close();
       }

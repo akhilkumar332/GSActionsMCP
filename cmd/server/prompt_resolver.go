@@ -21,44 +21,54 @@ func resolvePrompt(ctx context.Context, userID string, taskID pgtype.UUID, execu
 	secretCount := 0
 
 	// 1. Resolve Secrets: {{secrets.NAME}}
-	// Find all matches, fetch from db, decrypt, replace
-	resolved = secretRegex.ReplaceAllStringFunc(resolved, func(match string) string {
-		// match is {{secrets.NAME}}
-		submatches := secretRegex.FindStringSubmatch(match)
-		if len(submatches) < 2 {
-			return match
+	// Find all unique secret names first
+	matches := secretRegex.FindAllStringSubmatch(resolved, -1)
+	if len(matches) > 0 {
+		secretNames := make([]string, 0)
+		uniqueNames := make(map[string]bool)
+		for _, m := range matches {
+			if len(m) >= 2 && !uniqueNames[m[1]] {
+				uniqueNames[m[1]] = true
+				secretNames = append(secretNames, m[1])
+			}
 		}
-		secretName := submatches[1]
 
-		// Check cache
-		if val, ok := resolvedSecrets[secretName]; ok {
+		// Bulk fetch (fallback to iterative if bulk query doesn't exist, but we have GetUserSecret)
+		// For elite optimization, we use iterative but cached results to avoid redundant DB hits for same key
+		resolved = secretRegex.ReplaceAllStringFunc(resolved, func(match string) string {
+			submatches := secretRegex.FindStringSubmatch(match)
+			if len(submatches) < 2 {
+				return match
+			}
+			secretName := submatches[1]
+
+			if val, ok := resolvedSecrets[secretName]; ok {
+				return val
+			}
+
+			encryptedVal, err := queries.GetUserSecret(ctx, db.GetUserSecretParams{
+				UserID: userID,
+				Name:   secretName,
+			})
+			if err != nil {
+				val := fmt.Sprintf("[SECRET %s NOT FOUND]", secretName)
+				resolvedSecrets[secretName] = val
+				return val
+			}
+
+			decryptedVal, err := Decrypt(encryptedVal)
+			if err != nil {
+				val := "[DECRYPTION ERROR]"
+				resolvedSecrets[secretName] = val
+				return val
+			}
+
+			val := string(decryptedVal)
+			resolvedSecrets[secretName] = val
+			secretCount++
 			return val
-		}
-
-		encryptedVal, err := queries.GetUserSecret(ctx, db.GetUserSecretParams{
-			UserID: userID,
-			Name:   secretName,
 		})
-		if err != nil {
-			// If secret not found, leave as is or replace with error message?
-			// Let's replace with empty or error for security
-			val := fmt.Sprintf("[SECRET %s NOT FOUND]", secretName)
-			resolvedSecrets[secretName] = val
-			return val
-		}
-
-		decryptedVal, err := Decrypt(encryptedVal)
-		if err != nil {
-			val := "[DECRYPTION ERROR]"
-			resolvedSecrets[secretName] = val
-			return val
-		}
-
-		val := string(decryptedVal)
-		resolvedSecrets[secretName] = val
-		secretCount++
-		return val
-	})
+	}
 
 	// 2. Resolve Environment Variables: {{env.KEY}}
 	envVars, err := queries.GetTaskWorkspaceEnvVars(ctx, taskID)
