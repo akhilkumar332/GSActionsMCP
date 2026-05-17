@@ -2538,3 +2538,39 @@ func (q *Queries) UpsertWorkspaceEnvVar(ctx context.Context, arg UpsertWorkspace
 	)
 	return i, err
 }
+
+const updateTaskStatusAndLastRun = `-- name: UpdateTaskStatusAndLastRun :exec
+UPDATE tasks SET status = $1, locked_by = NULL, last_run = NOW() WHERE id = $2 AND user_id = $3
+`
+
+type UpdateTaskStatusAndLastRunParams struct {
+	Status pgtype.Text `json:"status"`
+	ID     pgtype.UUID `json:"id"`
+	UserID string      `json:"user_id"`
+}
+
+func (q *Queries) UpdateTaskStatusAndLastRun(ctx context.Context, arg UpdateTaskStatusAndLastRunParams) error {
+	_, err := q.db.Exec(ctx, updateTaskStatusAndLastRun, arg.Status, arg.ID, arg.UserID)
+	return err
+}
+
+const updateTaskApprovalStatusAndLastRun = `-- name: UpdateTaskApprovalStatusAndLastRun :exec
+UPDATE tasks SET last_approval_status = $1, status = $2, locked_by = NULL, last_run = NOW() WHERE id = $3 AND user_id = $4
+`
+
+type UpdateTaskApprovalStatusAndLastRunParams struct {
+	LastApprovalStatus pgtype.Text `json:"last_approval_status"`
+	Status             pgtype.Text `json:"status"`
+	ID                 pgtype.UUID `json:"id"`
+	UserID             string      `json:"user_id"`
+}
+
+func (q *Queries) UpdateTaskApprovalStatusAndLastRun(ctx context.Context, arg UpdateTaskApprovalStatusAndLastRunParams) error {
+	_, err := q.db.Exec(ctx, updateTaskApprovalStatusAndLastRun,
+		arg.LastApprovalStatus,
+		arg.Status,
+		arg.ID,
+		arg.UserID,
+	)
+	return err
+}

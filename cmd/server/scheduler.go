@@ -887,14 +887,14 @@ Respond with a JSON object: {"choice": "branch_key", "reasoning": "..."}`, prevO
 
 	if !found {
 		log.Printf("Decision router %s choice '%s' matched no dependent tasks", taskID, choice)
-		queries.UpdateTaskApprovalStatus(ctx, db.UpdateTaskApprovalStatusParams{
+		queries.UpdateTaskApprovalStatusAndLastRun(ctx, db.UpdateTaskApprovalStatusAndLastRunParams{
 			LastApprovalStatus: pgtype.Text{String: ApprovalStatusNeedsRouting, Valid: true},
 			Status:             pgtype.Text{String: StatusHalted, Valid: true},
 			ID:                 t.ID,
 			UserID:             t.UserID,
 		})
 	} else {
-		queries.UpdateTaskStatus(ctx, db.UpdateTaskStatusParams{
+		queries.UpdateTaskStatusAndLastRun(ctx, db.UpdateTaskStatusAndLastRunParams{
 			Status: pgtype.Text{String: StatusCompleted, Valid: true},
 			ID:     t.ID,
 			UserID: t.UserID,
@@ -1023,7 +1023,7 @@ func runReaper(ctx context.Context) {
 			pruneDays, err := queries.GetSystemSettings(ctx)
 			if err != nil {
 				log.Printf("Reaper: error fetching prune days: %v", err)
-			} else {
+			} else if pruneDays > 0 {
 				if err := queries.PruneZombieWorkers(ctx, pruneDays); err != nil {
 					log.Printf("Reaper: error pruning zombie workers: %v", err)
 				}

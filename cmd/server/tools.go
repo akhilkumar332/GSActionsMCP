@@ -185,7 +185,11 @@ func registerTools(s *server.MCPServer) {
 			},
 		})
 
-		resBytes, _ := json.Marshal(map[string]string{"status": "success", "task_id": formatUUID(task.ID), "next_run": nextRun.Format(time.RFC3339)})
+		resMap := map[string]string{"status": "success", "task_id": formatUUID(task.ID), "next_run": nextRun.Format(time.RFC3339)}
+		resBytes, err := json.Marshal(resMap)
+		if err != nil {
+			return mcp.NewToolResultError(fmt.Sprintf("internal error marshaling response: %v", err)), nil
+		}
 		return mcp.NewToolResultText(string(resBytes)), nil
 	})
 
@@ -290,17 +294,20 @@ func registerTools(s *server.MCPServer) {
 		}
 
 		// Emit Redis event
-		evtPayload, _ := json.Marshal(map[string]interface{}{
+		evtPayload, err := json.Marshal(map[string]interface{}{
 			"task_id": id,
 			"status":  StatusPaused,
 		})
-		if err := PublishEvent(ctx, PubSubEvent{
-			UserID:    userID,
-			EventType: "task_status_changed",
-			Payload:   string(evtPayload),
-		}); err != nil {
-			log.Printf("Error publishing task_status_changed event: %v", err)
+		if err == nil {
+			if err := PublishEvent(ctx, PubSubEvent{
+				UserID:    userID,
+				EventType: "task_status_changed",
+				Payload:   string(evtPayload),
+			}); err != nil {
+				log.Printf("Error publishing task_status_changed event: %v", err)
+			}
 		}
+
 		writeAuditLog(ctx, AuditEvent{
 			UserID:       userID,
 			Action:       "task.pause",
@@ -308,7 +315,10 @@ func registerTools(s *server.MCPServer) {
 			ResourceID:   id,
 		})
 
-		resBytes, _ := json.Marshal(map[string]string{"status": StatusPaused})
+		resBytes, err := json.Marshal(map[string]string{"status": StatusPaused})
+		if err != nil {
+			return mcp.NewToolResultError(fmt.Sprintf("internal error: %v", err)), nil
+		}
 		return mcp.NewToolResultText(string(resBytes)), nil
 	})
 
@@ -355,14 +365,17 @@ func registerTools(s *server.MCPServer) {
 		}
 
 		// Emit Redis event
-		payload, _ := json.Marshal(map[string]string{"task_id": id, "status": StatusActive})
-		if err := PublishEvent(ctx, PubSubEvent{
-			UserID:    userID,
-			EventType: "task_status_changed",
-			Payload:   string(payload),
-		}); err != nil {
-			log.Printf("Error publishing task_status_changed event: %v", err)
+		evtPayload, err := json.Marshal(map[string]string{"task_id": id, "status": StatusActive})
+		if err == nil {
+			if err := PublishEvent(ctx, PubSubEvent{
+				UserID:    userID,
+				EventType: "task_status_changed",
+				Payload:   string(evtPayload),
+			}); err != nil {
+				log.Printf("Error publishing task_status_changed event: %v", err)
+			}
 		}
+
 		writeAuditLog(ctx, AuditEvent{
 			UserID:       userID,
 			Action:       "task.resume",
@@ -370,7 +383,10 @@ func registerTools(s *server.MCPServer) {
 			ResourceID:   id,
 		})
 
-		resBytes, _ := json.Marshal(map[string]string{"status": StatusActive})
+		resBytes, err := json.Marshal(map[string]string{"status": StatusActive})
+		if err != nil {
+			return mcp.NewToolResultError(fmt.Sprintf("internal error: %v", err)), nil
+		}
 		return mcp.NewToolResultText(string(resBytes)), nil
 	})
 
@@ -420,7 +436,10 @@ func registerTools(s *server.MCPServer) {
 			ResourceType: "task",
 			ResourceID:   id,
 		})
-		resBytes, _ := json.Marshal(map[string]string{"status": "deleted"})
+		resBytes, err := json.Marshal(map[string]string{"status": "deleted"})
+		if err != nil {
+			return mcp.NewToolResultError(fmt.Sprintf("internal error: %v", err)), nil
+		}
 		return mcp.NewToolResultText(string(resBytes)), nil
 	})
 

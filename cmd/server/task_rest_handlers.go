@@ -560,7 +560,7 @@ func apiManualRouteHandler(c echo.Context) error {
 	}
 
 	// 4. Mark source task as completed (or approved)
-	err = queries.UpdateTaskApprovalStatus(c.Request().Context(), db.UpdateTaskApprovalStatusParams{
+	err = queries.UpdateTaskApprovalStatusAndLastRun(c.Request().Context(), db.UpdateTaskApprovalStatusAndLastRunParams{
 		LastApprovalStatus: pgtype.Text{String: "manual_routed", Valid: true},
 		Status:             pgtype.Text{String: "completed", Valid: true},
 		ID:                 taskID,

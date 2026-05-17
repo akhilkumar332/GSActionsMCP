@@ -906,6 +906,10 @@ func apiAdminPruneNowHandler(c echo.Context) error {
 		return c.JSON(http.StatusInternalServerError, APIResponse{Success: false, Error: "Failed to fetch settings"})
 	}
 
+	if days <= 0 {
+		return c.JSON(http.StatusBadRequest, APIResponse{Success: false, Error: "Invalid pruning threshold in settings"})
+	}
+
 	err = queries.PruneZombieWorkers(c.Request().Context(), days)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, APIResponse{Success: false, Error: "Failed to prune workers"})

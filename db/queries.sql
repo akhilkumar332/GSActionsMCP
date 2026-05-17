@@ -164,6 +164,12 @@ UPDATE tasks SET last_approval_status = $1, status = $2, locked_by = NULL WHERE 
 -- name: DeleteTask :exec
 DELETE FROM tasks WHERE id = $1 AND user_id = $2;
 
+-- name: UpdateTaskStatusAndLastRun :exec
+UPDATE tasks SET status = $1, locked_by = NULL, last_run = NOW() WHERE id = $2 AND user_id = $3;
+
+-- name: UpdateTaskApprovalStatusAndLastRun :exec
+UPDATE tasks SET last_approval_status = $1, status = $2, locked_by = NULL, last_run = NOW() WHERE id = $3 AND user_id = $4;
+
 -- name: ResetTaskFailureCount :exec
 UPDATE tasks SET status = $1, failure_count = 0 WHERE id = $2 AND user_id = $3;
 

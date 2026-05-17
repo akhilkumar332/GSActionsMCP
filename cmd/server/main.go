@@ -477,7 +477,7 @@ func main() {
 
 	go func() {
 		if err := e.Start(":" + port); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("shuting down the server: %v", err)
+			log.Fatalf("shutting down the server: %v", err)
 		}
 	}()
 
