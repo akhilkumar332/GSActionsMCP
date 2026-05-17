@@ -9,10 +9,10 @@ import (
 	"strings"
 	"time"
 
+	"actionfy/db"
 	"github.com/gorilla/csrf"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/labstack/echo/v4"
-	"actionfy/db"
 )
 
 type AuthInput struct {
@@ -405,7 +405,7 @@ func apiAdminUpdateUserHandler(c echo.Context) error {
 			return c.JSON(http.StatusInternalServerError, APIResponse{Success: false, Error: "Failed to update user tier"})
 		}
 	}
-	
+
 	adminID := adminUser.ID
 	writeAuditLog(c.Request().Context(), AuditEvent{
 		UserID:       adminID,

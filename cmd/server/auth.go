@@ -7,9 +7,9 @@ import (
 	"fmt"
 	"time"
 
+	"actionfy/db"
 	"github.com/jackc/pgx/v5/pgtype"
 	"golang.org/x/crypto/bcrypt"
-	"actionfy/db"
 )
 
 // RegisterUser hashes password, generates API key, and inserts user into DB

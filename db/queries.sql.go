@@ -2234,7 +2234,6 @@ func (q *Queries) UpdateSystemSettings(ctx context.Context, workerPruneDays int3
 	return err
 }
 
-
 const updateTaskAgentPromptAndPolicy = `-- name: UpdateTaskAgentPromptAndPolicy :one
 UPDATE tasks
 SET agent_prompt = $1, 
@@ -2591,8 +2590,8 @@ SELECT COUNT(*) FROM execution_traces WHERE start_time > $1 AND start_time <= $2
 `
 
 type GetCountTracesBetweenParams struct {
-	StartTime   pgtype.Timestamptz `json:"start_time"`
-	EndTime     pgtype.Timestamptz `json:"end_time"`
+	StartTime pgtype.Timestamptz `json:"start_time"`
+	EndTime   pgtype.Timestamptz `json:"end_time"`
 }
 
 func (q *Queries) GetCountTracesBetween(ctx context.Context, arg GetCountTracesBetweenParams) (int64, error) {
@@ -2620,8 +2619,8 @@ FROM execution_traces WHERE start_time > $1 AND start_time <= $2
 `
 
 type GetSuccessRateBetweenParams struct {
-	StartTime   pgtype.Timestamptz `json:"start_time"`
-	EndTime     pgtype.Timestamptz `json:"end_time"`
+	StartTime pgtype.Timestamptz `json:"start_time"`
+	EndTime   pgtype.Timestamptz `json:"end_time"`
 }
 
 func (q *Queries) GetSuccessRateBetween(ctx context.Context, arg GetSuccessRateBetweenParams) (float64, error) {

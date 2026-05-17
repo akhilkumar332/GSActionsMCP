@@ -8,12 +8,12 @@ import (
 	"os"
 	"strings"
 
+	"actionfy/db"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/labstack/echo/v4"
 	"github.com/stripe/stripe-go/v78"
 	"github.com/stripe/stripe-go/v78/checkout/session"
 	"github.com/stripe/stripe-go/v78/webhook"
-	"actionfy/db"
 )
 
 func init() {
@@ -105,14 +105,14 @@ func apiStripeWebhook(c echo.Context) error {
 				log.Printf("Billing: Failed to update user tier in DB: %v", err)
 				return c.JSON(http.StatusInternalServerError, APIResponse{Success: false, Error: "Database error"})
 			}
-			
+
 			writeAuditLog(c.Request().Context(), AuditEvent{
 				UserID:       userID,
 				Action:       "billing.upgrade",
 				ResourceType: "user",
 				ResourceID:   userID,
 				Metadata: map[string]interface{}{
-					"tier": TierPro,
+					"tier":   TierPro,
 					"source": "stripe_webhook",
 				},
 			})

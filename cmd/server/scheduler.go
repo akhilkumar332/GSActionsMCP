@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"actionfy/db"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/mark3labs/mcp-go/mcp"
@@ -18,7 +19,6 @@ import (
 	"github.com/robfig/cron/v3"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/propagation"
-	"actionfy/db"
 )
 
 var promptVarRegex = regexp.MustCompile(`\{\{task\.([0-9a-fA-F-]{36})\.output\}\}`)
@@ -268,7 +268,7 @@ func handleDispatchTask(workerCtx context.Context, t db.Task, triggerPayload map
 			"execution_id": executionID,
 			"payload":      triggerPayload,
 		}
-		
+
 		inputJSON, _ := json.Marshal(inputMap)
 		if _, err := queries.CreateExecutionTrace(workerCtx, db.CreateExecutionTraceParams{
 			TaskID:      t.ID,
@@ -450,7 +450,6 @@ func handleDispatchTask(workerCtx context.Context, t db.Task, triggerPayload map
 		log.Printf("Trace error for task %s: %v", taskID, err)
 	}
 
-
 	resolvedPrompt := resolvePromptVariables(workerCtx, t.UserID, t.AgentPrompt, triggerPayload, state)
 
 	traceContext := make(map[string]string)
@@ -487,7 +486,6 @@ func handleDispatchTask(workerCtx context.Context, t db.Task, triggerPayload map
 		}); err != nil {
 			log.Printf("Trace error: %v", err)
 		}
-
 
 		failureCount := t.FailureCount.Int32 + 1
 		logID, logErr := queries.CreateTaskLog(workerCtx, db.CreateTaskLogParams{

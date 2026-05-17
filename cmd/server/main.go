@@ -14,6 +14,7 @@ import (
 	"syscall"
 	"time"
 
+	"actionfy/db"
 	"github.com/golang-migrate/migrate/v4"
 	_ "github.com/golang-migrate/migrate/v4/database/postgres"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
@@ -25,8 +26,8 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/redis/go-redis/v9"
-	"actionfy/db"
 
+	"github.com/exaring/otelpgx"
 	"go.opentelemetry.io/contrib/instrumentation/github.com/labstack/echo/otelecho"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
@@ -34,7 +35,6 @@ import (
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.24.0"
-	"github.com/exaring/otelpgx"
 )
 
 func initRedis(redisUrl string) {
@@ -207,7 +207,7 @@ func main() {
 	e.Pre(func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 			r := c.Request()
-			
+
 			// Force populate r.URL Host/Scheme from request headers if missing
 			// gorilla/csrf's same-origin check requires these to be present.
 			if r.URL.Host == "" {
@@ -277,7 +277,7 @@ func main() {
 
 			log.Printf("CSRF Failure for %s %s: %v", r.Method, r.URL.Path, failureReason)
 			log.Printf("CSRF Debug - Origin: %q, Referer: %q, Host: %q, RequestURL: %q", origin, referer, host, r.URL.String())
-			
+
 			errorMessage := fmt.Sprintf("Forbidden - CSRF error: %v", failureReason)
 			if strings.Contains(failureReason.Error(), "Origin") {
 				errorMessage = fmt.Sprintf("CSRF Origin mismatch: %q is not in trusted list. Host is %q, RequestURL is %q.", origin, host, r.URL.String())

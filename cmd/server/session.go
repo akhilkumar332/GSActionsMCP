@@ -12,11 +12,11 @@ import (
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/propagation"
 
+	"actionfy/db"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/redis/go-redis/v9"
-	"actionfy/db"
 )
 
 // GlobalSessionManager tracks which users have active SSE connections via Redis
@@ -82,7 +82,7 @@ func (sm *SessionManager) MaintainHeartbeat(ctx context.Context, userID string, 
 	connCountKey := fmt.Sprintf("conn_count:%s", userID)
 	count, _ := sm.redisClient.Incr(ctx, connCountKey).Result()
 	sm.redisClient.Expire(ctx, connCountKey, 1*time.Minute)
-	
+
 	defer func() {
 		sm.redisClient.Decr(context.Background(), connCountKey)
 	}()
@@ -174,7 +174,7 @@ func (sm *SessionManager) MaintainHeartbeat(ctx context.Context, userID string, 
 						// Use context.Background() but propagate the trace from the pubsub message.
 						// This ensures the task finishes even if the user closes their browser (SSE cancels).
 						parentCtx := otel.GetTextMapPropagator().Extract(context.Background(), carrier)
-						
+
 						// Create a background context with timeout for the entire execution
 						ctx, span := otel.Tracer("actionfy").Start(parentCtx, "Redis Task Trigger")
 						defer span.End()
@@ -182,7 +182,7 @@ func (sm *SessionManager) MaintainHeartbeat(ctx context.Context, userID string, 
 						taskID, _ := taskData["task_id"].(string)
 						prompt, _ := taskData["prompt"].(string)
 						executionID, _ := taskData["execution_id"].(string)
-						
+
 						span.SetAttributes(
 							attribute.String("task_id", taskID),
 							attribute.String("execution_id", executionID),

@@ -50,14 +50,14 @@ func SubscribeToEvents(ctx context.Context, onEvent func(context.Context, PubSub
 				// Extract trace context
 				parentCtx := otel.GetTextMapPropagator().Extract(ctx, propagation.MapCarrier(event.TraceContext))
 				_, span := otel.Tracer("actionfy").Start(parentCtx, "Redis Subscription")
-				
+
 				onEvent(parentCtx, event)
 				span.End()
 			}
-			
+
 			pubsub.Close()
 			log.Printf("Redis system_events channel closed. Retrying in 5s...")
-			
+
 			select {
 			case <-ctx.Done():
 				return

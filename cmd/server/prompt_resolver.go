@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"regexp"
 
-	"github.com/jackc/pgx/v5/pgtype"
 	"actionfy/db"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 var secretRegex = regexp.MustCompile(`\{\{secrets\.([a-zA-Z0-9_-]+)\}\}`)

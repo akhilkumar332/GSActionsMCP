@@ -100,7 +100,7 @@ func (c runtimeConfig) secureCookies() bool {
 
 func (c runtimeConfig) csrfTrustedOrigins() []string {
 	// gorilla/csrf TrustedOrigins should be scheme://host[:port]
-	
+
 	origins := []string{
 		"http://localhost:8080",
 		"https://localhost:8080",
@@ -194,7 +194,7 @@ func (c runtimeConfig) csrfTrustedOrigins() []string {
 			origins = append(origins, "https://"+hostWithPort)
 			origins = append(origins, "http://"+hostOnly)
 			origins = append(origins, "https://"+hostOnly)
-			
+
 			if c.LocalDev {
 				origins = append(origins, "http://"+hostOnly+":"+port)
 				origins = append(origins, "https://"+hostOnly+":"+port)

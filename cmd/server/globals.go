@@ -1,6 +1,7 @@
 package main
 
 import (
+	"actionfy/db"
 	"encoding/hex"
 	"fmt"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -8,7 +9,6 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/redis/go-redis/v9"
 	"net/http"
-	"actionfy/db"
 	"strings"
 	"sync"
 )

@@ -3,9 +3,9 @@ package main
 import (
 	"net/http"
 
+	"actionfy/db"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/labstack/echo/v4"
-	"actionfy/db"
 )
 
 func handleGetWorkspaces(c echo.Context) error {

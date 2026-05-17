@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"log"
 
-	"github.com/jackc/pgx/v5/pgtype"
 	"actionfy/db"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type AuditEvent struct {
