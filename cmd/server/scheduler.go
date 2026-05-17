@@ -39,37 +39,54 @@ func listenForTaskQueued(ctx context.Context, dbURL string) {
 			return
 		}
 
-		conn, err := pgx.Connect(ctx, dbURL)
+		err := processTaskQueue(ctx, dbURL)
 		if err != nil {
-			log.Printf("Failed to connect task queue listener: %v. Retrying...", err)
-			time.Sleep(backoff)
-			continue
+			log.Printf("Task queue listener error: %v. Retrying in %v...", err, backoff)
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(backoff):
+			}
+			if backoff < 30*time.Second {
+				backoff *= 2
+			}
+		} else {
+			backoff = time.Second
 		}
+	}
+}
 
-		_, err = conn.Exec(ctx, "LISTEN task_queued")
+func processTaskQueue(ctx context.Context, dbURL string) error {
+	conn, err := pgx.Connect(ctx, dbURL)
+	if err != nil {
+		return fmt.Errorf("failed to connect: %w", err)
+	}
+	defer conn.Close(context.Background())
+
+	_, err = conn.Exec(ctx, "LISTEN task_queued")
+	if err != nil {
+		return fmt.Errorf("failed to LISTEN for task_queued: %w", err)
+	}
+
+	for {
+		_, err := conn.WaitForNotification(ctx)
 		if err != nil {
-			conn.Close(context.Background())
-			continue
+			if ctx.Err() != nil {
+				return nil
+			}
+			return fmt.Errorf("wait for notification failed: %w", err)
 		}
-
-		for {
-			_, err := conn.WaitForNotification(ctx)
-			if err != nil {
-				conn.Close(context.Background())
-				break
-			}
-			
-			// A task is instantly ready. Attempt a claim immediately.
-			claimCtx, claimCancel := context.WithTimeout(ctx, 5*time.Second)
-			tasks, err := queries.ClaimDueTasks(claimCtx, db.ClaimDueTasksParams{
-				BatchSize: 10, // Small batch for instant events
-				WorkerID:  workerID,
-			})
-			claimCancel()
-			if err == nil && len(tasks) > 0 {
-				schedulerClaimsTotal.Add(float64(len(tasks)))
-				log.Printf("Event-driven claim: %d task(s)", len(tasks))
-			}
+		
+		// A task is instantly ready. Attempt a claim immediately.
+		claimCtx, claimCancel := context.WithTimeout(ctx, 5*time.Second)
+		tasks, err := queries.ClaimDueTasks(claimCtx, db.ClaimDueTasksParams{
+			BatchSize: 10, // Small batch for instant events
+			WorkerID:  workerID,
+		})
+		claimCancel()
+		if err == nil && len(tasks) > 0 {
+			schedulerClaimsTotal.Add(float64(len(tasks)))
+			log.Printf("Event-driven claim: %d task(s)", len(tasks))
 		}
 	}
 }
