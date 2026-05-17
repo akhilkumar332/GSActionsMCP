@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import axios from 'axios';
 import { X, ArrowRight, Play } from 'lucide-react';
 
@@ -8,12 +8,13 @@ const ManualRouteModal = ({ isOpen, onClose, task, tasks, onRouted }) => {
   const [branches, setBranches] = useState([]);
 
   useEffect(() => {
-    if (isOpen && task && tasks) {
+    if (isOpen && task?.id && tasks) {
       // Find all tasks that depend on this task
       const dependentTasks = tasks.filter(t => t.depends_on_task_id === task.id);
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setBranches(dependentTasks);
     }
-  }, [isOpen, task, tasks]);
+  }, [isOpen, task?.id, tasks]);
 
   if (!isOpen) return null;
 

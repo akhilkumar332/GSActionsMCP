@@ -86,8 +86,8 @@ func registerTools(s *server.MCPServer) {
 			return mcp.NewToolResultError("missing or invalid 'trigger_config'"), nil
 		}
 
-		taskType := ""
-		if tt, ok := args["task_type"].(string); ok {
+		taskType := "mcp_sampling"
+		if tt, ok := args["task_type"].(string); ok && tt != "" {
 			taskType = tt
 		}
 		nativeCode := ""

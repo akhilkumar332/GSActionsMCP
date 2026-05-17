@@ -234,6 +234,7 @@ const WorkflowCanvas = () => {
       }));
     } else if (!playbackMode) {
         // Reset styles when leaving playback mode
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         fetchTasks();
     }
   }, [playbackMode, currentTraceIndex, traces, selectedTask, fetchTasks, setNodes]);
@@ -288,6 +289,7 @@ const WorkflowCanvas = () => {
   }, [setNodes, setEdges]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchTasks();
 
     // SSE Setup
