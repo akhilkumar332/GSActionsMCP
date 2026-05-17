@@ -241,8 +241,8 @@ CREATE TABLE execution_traces (
     start_time TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     end_time TIMESTAMP WITH TIME ZONE,
     duration_ms INT,
-    input_data JSONB,
-    output_data JSONB,
+    input_data TEXT,
+    output_data TEXT,
     is_error BOOLEAN DEFAULT false,
     error_message TEXT
 );

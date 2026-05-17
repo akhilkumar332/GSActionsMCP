@@ -10,7 +10,7 @@ export const useSSE = (onEvent) => {
     let reconnectTimeout;
 
     const connect = () => {
-      console.log('Connecting to SSE...');
+      // console.log('Connecting to SSE...');
       eventSource = new EventSource('/sse', { withCredentials: true });
 
       eventSource.onmessage = (event) => {
@@ -27,12 +27,11 @@ export const useSSE = (onEvent) => {
         eventSource.close();
         
         // Simple reconnect with 3 second delay
-        console.log('Attempting to reconnect in 3s...');
         reconnectTimeout = setTimeout(connect, 3000);
       };
 
       eventSource.onopen = () => {
-        console.log('SSE connection established');
+        // SSE connection established
       };
     };
 

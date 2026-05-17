@@ -263,14 +263,17 @@ func handleDispatchTask(workerCtx context.Context, t db.Task, triggerPayload map
 			"execution_id": executionID,
 			"payload":      triggerPayload,
 		}
+		
 		inputJSON, _ := json.Marshal(inputMap)
-		queries.CreateExecutionTrace(workerCtx, db.CreateExecutionTraceParams{
+		if _, err := queries.CreateExecutionTrace(workerCtx, db.CreateExecutionTraceParams{
 			TaskID:      t.ID,
 			ExecutionID: executionID,
 			WorkerID:    workerID,
-			StepName:    "Native Execution",
-			InputData:   inputJSON,
-		})
+			StepName:    "Native Execution Started",
+			InputData:   pgtype.Text{String: string(inputJSON), Valid: true},
+		}); err != nil {
+			log.Printf("Trace error for task %s: %v", taskID, err)
+		}
 
 		result, err := executeNativeJS(workerCtx, t.NativeCode.String, inputMap)
 		if err != nil {
@@ -305,14 +308,16 @@ func handleDispatchTask(workerCtx context.Context, t db.Task, triggerPayload map
 				log.Printf("Error publishing task_executed event for %s (failure): %v", taskID, err)
 			}
 
-			queries.CreateExecutionTrace(workerCtx, db.CreateExecutionTraceParams{
+			if _, err := queries.CreateExecutionTrace(workerCtx, db.CreateExecutionTraceParams{
 				TaskID:       t.ID,
 				ExecutionID:  executionID,
 				WorkerID:     workerID,
 				StepName:     "Native Execution Failed",
 				IsError:      pgtype.Bool{Bool: true, Valid: true},
 				ErrorMessage: pgtype.Text{String: err.Error(), Valid: true},
-			})
+			}); err != nil {
+				log.Printf("Trace error for task %s: %v", taskID, err)
+			}
 
 			retryCount := t.RetryCount.Int32 + 1
 			maxRetries := t.MaxRetries.Int32
@@ -386,13 +391,15 @@ func handleDispatchTask(workerCtx context.Context, t db.Task, triggerPayload map
 				log.Printf("Error publishing task_executed event for %s (success): %v", taskID, err)
 			}
 
-			queries.CreateExecutionTrace(workerCtx, db.CreateExecutionTraceParams{
+			if _, err := queries.CreateExecutionTrace(workerCtx, db.CreateExecutionTraceParams{
 				TaskID:      t.ID,
 				ExecutionID: executionID,
 				WorkerID:    workerID,
 				StepName:    "Native Execution Success",
-				OutputData:  []byte(result),
-			})
+				OutputData:  pgtype.Text{String: result, Valid: true},
+			}); err != nil {
+				log.Printf("Trace error for task %s: %v", taskID, err)
+			}
 
 			var config map[string]interface{}
 			if err := json.Unmarshal(t.TriggerConfig, &config); err == nil {
@@ -411,13 +418,16 @@ func handleDispatchTask(workerCtx context.Context, t db.Task, triggerPayload map
 		return
 	}
 
-	queries.CreateExecutionTrace(workerCtx, db.CreateExecutionTraceParams{
+	if _, err := queries.CreateExecutionTrace(workerCtx, db.CreateExecutionTraceParams{
 		TaskID:      t.ID,
 		ExecutionID: executionID,
 		WorkerID:    workerID,
-		StepName:    "Prompt Resolution",
-		InputData:   []byte(t.AgentPrompt),
-	})
+		StepName:    "Executor Started",
+		InputData:   pgtype.Text{String: t.AgentPrompt, Valid: true},
+	}); err != nil {
+		log.Printf("Trace error for task %s: %v", taskID, err)
+	}
+
 
 	resolvedPrompt := resolvePromptVariables(workerCtx, t.UserID, t.AgentPrompt, triggerPayload, state)
 
@@ -445,14 +455,17 @@ func handleDispatchTask(workerCtx context.Context, t db.Task, triggerPayload map
 		}
 		log.Printf("Failed to deliver task %s for user %s: %v", taskID, t.UserID, err)
 
-		queries.CreateExecutionTrace(workerCtx, db.CreateExecutionTraceParams{
+		if _, err := queries.CreateExecutionTrace(workerCtx, db.CreateExecutionTraceParams{
 			TaskID:       t.ID,
 			ExecutionID:  executionID,
 			WorkerID:     workerID,
-			StepName:     "Redis Delivery Failed",
+			StepName:     "Task Delivery Failed",
 			IsError:      pgtype.Bool{Bool: true, Valid: true},
 			ErrorMessage: pgtype.Text{String: err.Error(), Valid: true},
-		})
+		}); err != nil {
+			log.Printf("Trace error: %v", err)
+		}
+
 
 		failureCount := t.FailureCount.Int32 + 1
 		logID, logErr := queries.CreateTaskLog(workerCtx, db.CreateTaskLogParams{
@@ -571,6 +584,16 @@ func handleDispatchTask(workerCtx context.Context, t db.Task, triggerPayload map
 		log.Printf("Error publishing task_executed event for %s (delivered): %v", taskID, err)
 	}
 
+	if _, err := queries.CreateExecutionTrace(workerCtx, db.CreateExecutionTraceParams{
+		TaskID:      t.ID,
+		ExecutionID: executionID,
+		WorkerID:    workerID,
+		StepName:    "Task Delivered",
+		OutputData:  pgtype.Text{String: "Task delivered to node via Redis", Valid: true},
+	}); err != nil {
+		log.Printf("Trace error for task %s: %v", taskID, err)
+	}
+
 	log.Printf("Task %s delivered to node. Remaining in 'processing' status.", taskID)
 }
 
@@ -595,7 +618,7 @@ func resolvePromptVariables(ctx context.Context, userID string, prompt string, t
 			log.Printf("Error fetching output for task %s (user %s): %v", taskIDStr, userID, err)
 			return match
 		}
-		return string(output)
+		return output.String
 	})
 
 	// Support {{state.FIELD}}
@@ -715,13 +738,15 @@ func executeDecisionRouter(ctx context.Context, mcpServer *server.MCPServer, t d
 	taskID := formatUUID(t.ID)
 	executionID := fmt.Sprintf("%s-router-%d", taskID, time.Now().UTC().UnixNano())
 
-	queries.CreateExecutionTrace(ctx, db.CreateExecutionTraceParams{
+	if _, err := queries.CreateExecutionTrace(ctx, db.CreateExecutionTraceParams{
 		TaskID:      t.ID,
 		ExecutionID: executionID,
 		WorkerID:    workerID,
 		StepName:    "Decision Router Start",
-		InputData:   []byte(prevOutput),
-	})
+		InputData:   pgtype.Text{String: prevOutput, Valid: true},
+	}); err != nil {
+		log.Printf("Trace error: %v", err)
+	}
 
 	// 1. Fetch dependent tasks
 	dependents, err := queries.GetDependentTasks(ctx, t.ID)
@@ -755,14 +780,17 @@ Respond with a JSON object: {"choice": "branch_key", "reasoning": "..."}`, prevO
 			ID:                 t.ID,
 			UserID:             t.UserID,
 		})
-		queries.CreateExecutionTrace(ctx, db.CreateExecutionTraceParams{
+		if _, err := queries.CreateExecutionTrace(ctx, db.CreateExecutionTraceParams{
 			TaskID:       t.ID,
 			ExecutionID:  executionID,
 			WorkerID:     workerID,
 			StepName:     "Decision Router LLM Failed",
 			IsError:      pgtype.Bool{Bool: true, Valid: true},
 			ErrorMessage: pgtype.Text{String: err.Error(), Valid: true},
-		})
+		}); err != nil {
+			log.Printf("Trace error: %v", err)
+		}
+
 		return
 	}
 
@@ -811,23 +839,28 @@ Respond with a JSON object: {"choice": "branch_key", "reasoning": "..."}`, prevO
 			ID:                 t.ID,
 			UserID:             t.UserID,
 		})
-		queries.CreateExecutionTrace(ctx, db.CreateExecutionTraceParams{
+		if _, err := queries.CreateExecutionTrace(ctx, db.CreateExecutionTraceParams{
 			TaskID:       t.ID,
 			ExecutionID:  executionID,
 			WorkerID:     workerID,
 			StepName:     "Decision Router No Choice",
 			ErrorMessage: pgtype.Text{String: "LLM did not provide a valid choice JSON", Valid: true},
-		})
+			IsError:      pgtype.Bool{Bool: true, Valid: true},
+		}); err != nil {
+			log.Printf("Trace error: %v", err)
+		}
 		return
 	}
 
-	queries.CreateExecutionTrace(ctx, db.CreateExecutionTraceParams{
+	if _, err := queries.CreateExecutionTrace(ctx, db.CreateExecutionTraceParams{
 		TaskID:      t.ID,
 		ExecutionID: executionID,
 		WorkerID:    workerID,
 		StepName:    "Decision Router Choice Made",
-		OutputData:  []byte(fmt.Sprintf("Choice: %s", choice)),
-	})
+		OutputData:  pgtype.Text{String: fmt.Sprintf("Choice: %s", choice), Valid: true},
+	}); err != nil {
+		log.Printf("Trace error: %v", err)
+	}
 
 	// 3. Match choice and activate task
 	found := false
@@ -904,7 +937,7 @@ func completeTask(ctx context.Context, userID string, taskID string, nextRun tim
 		TaskID: tid,
 		UserID: userID,
 	})
-	parentOutput := string(parentOutputBytes)
+	parentOutput := parentOutputBytes.String
 
 	for _, t := range dependents {
 		if !evaluateBranchCondition(t.BranchCondition, parentOutput) {

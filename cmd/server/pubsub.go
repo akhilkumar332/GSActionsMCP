@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"log"
+	"time"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/propagation"
@@ -30,22 +31,39 @@ func PublishEvent(ctx context.Context, event PubSubEvent) error {
 }
 
 func SubscribeToEvents(ctx context.Context, onEvent func(context.Context, PubSubEvent)) {
-	pubsub := RedisClient.Subscribe(ctx, "system_events")
-	defer pubsub.Close()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+			pubsub := RedisClient.Subscribe(ctx, "system_events")
+			log.Printf("Subscribed to Redis system_events")
 
-	ch := pubsub.Channel()
-	for msg := range ch {
-		var event PubSubEvent
-		if err := json.Unmarshal([]byte(msg.Payload), &event); err != nil {
-			log.Printf("Error unmarshaling event: %v", err)
-			continue
+			ch := pubsub.Channel()
+			for msg := range ch {
+				var event PubSubEvent
+				if err := json.Unmarshal([]byte(msg.Payload), &event); err != nil {
+					log.Printf("Error unmarshaling event: %v", err)
+					continue
+				}
+
+				// Extract trace context
+				parentCtx := otel.GetTextMapPropagator().Extract(ctx, propagation.MapCarrier(event.TraceContext))
+				_, span := otel.Tracer("scheduler-mcp").Start(parentCtx, "Redis Subscription")
+				
+				onEvent(parentCtx, event)
+				span.End()
+			}
+			
+			pubsub.Close()
+			log.Printf("Redis system_events channel closed. Retrying in 5s...")
+			
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(5 * time.Second):
+				// retry
+			}
 		}
-
-		// Extract trace context
-		parentCtx := otel.GetTextMapPropagator().Extract(ctx, propagation.MapCarrier(event.TraceContext))
-		_, span := otel.Tracer("scheduler-mcp").Start(parentCtx, "Redis Subscription")
-		
-		onEvent(parentCtx, event)
-		span.End()
 	}
 }

@@ -216,8 +216,8 @@ type CreateExecutionTraceParams struct {
 	ExecutionID  string      `json:"execution_id"`
 	WorkerID     string      `json:"worker_id"`
 	StepName     string      `json:"step_name"`
-	InputData    []byte      `json:"input_data"`
-	OutputData   []byte      `json:"output_data"`
+	InputData    pgtype.Text `json:"input_data"`
+	OutputData   pgtype.Text `json:"output_data"`
 	IsError      pgtype.Bool `json:"is_error"`
 	ErrorMessage pgtype.Text `json:"error_message"`
 }
@@ -783,17 +783,12 @@ func (q *Queries) GetDailyExecutionTrends(ctx context.Context) ([]GetDailyExecut
 	return items, nil
 }
 
-const getDependentTasksToTrigger = `-- name: GetDependentTasksToTrigger :many
-SELECT t.id, t.user_id, t.name, t.trigger_type, t.trigger_config, t.agent_prompt, t.status, t.locked_by, t.next_run, t.last_run, t.failure_count, t.missed_task_policy, t.depends_on_task_id, t.created_at, t.requires_approval, t.encrypted_secrets, t.last_approval_status, t.trigger_on_completion, t.task_type, t.native_code, t.workspace_id, t.max_retries, t.retry_count, t.backoff_strategy, t.ui_coordinates, t.branch_condition, t.is_bundle_root, t.loop_condition FROM tasks t
-INNER JOIN tasks parent ON t.depends_on_task_id = parent.id
-WHERE t.depends_on_task_id = $1 
-  AND t.trigger_on_completion = TRUE 
-  AND t.status = 'active'
-  AND t.user_id = parent.user_id
+const getDependentTasks = `-- name: GetDependentTasks :many
+SELECT id, user_id, name, trigger_type, trigger_config, agent_prompt, status, locked_by, next_run, last_run, failure_count, missed_task_policy, depends_on_task_id, created_at, requires_approval, encrypted_secrets, last_approval_status, trigger_on_completion, task_type, native_code, workspace_id, max_retries, retry_count, backoff_strategy, ui_coordinates, branch_condition, is_bundle_root, loop_condition FROM tasks WHERE depends_on_task_id = $1
 `
 
-func (q *Queries) GetDependentTasksToTrigger(ctx context.Context, dependsOnTaskID pgtype.UUID) ([]Task, error) {
-	rows, err := q.db.Query(ctx, getDependentTasksToTrigger, dependsOnTaskID)
+func (q *Queries) GetDependentTasks(ctx context.Context, dependsOnTaskID pgtype.UUID) ([]Task, error) {
+	rows, err := q.db.Query(ctx, getDependentTasks, dependsOnTaskID)
 	if err != nil {
 		return nil, err
 	}
@@ -841,12 +836,17 @@ func (q *Queries) GetDependentTasksToTrigger(ctx context.Context, dependsOnTaskI
 	return items, nil
 }
 
-const getDependentTasks = `-- name: GetDependentTasks :many
-SELECT id, user_id, name, trigger_type, trigger_config, agent_prompt, status, locked_by, next_run, last_run, failure_count, missed_task_policy, depends_on_task_id, created_at, requires_approval, encrypted_secrets, last_approval_status, trigger_on_completion, task_type, native_code, workspace_id, max_retries, retry_count, backoff_strategy, ui_coordinates, branch_condition, is_bundle_root, loop_condition FROM tasks WHERE depends_on_task_id = $1
+const getDependentTasksToTrigger = `-- name: GetDependentTasksToTrigger :many
+SELECT t.id, t.user_id, t.name, t.trigger_type, t.trigger_config, t.agent_prompt, t.status, t.locked_by, t.next_run, t.last_run, t.failure_count, t.missed_task_policy, t.depends_on_task_id, t.created_at, t.requires_approval, t.encrypted_secrets, t.last_approval_status, t.trigger_on_completion, t.task_type, t.native_code, t.workspace_id, t.max_retries, t.retry_count, t.backoff_strategy, t.ui_coordinates, t.branch_condition, t.is_bundle_root, t.loop_condition FROM tasks t
+INNER JOIN tasks parent ON t.depends_on_task_id = parent.id
+WHERE t.depends_on_task_id = $1 
+  AND t.trigger_on_completion = TRUE 
+  AND t.status = 'active'
+  AND t.user_id = parent.user_id
 `
 
-func (q *Queries) GetDependentTasks(ctx context.Context, dependsOnTaskID pgtype.UUID) ([]Task, error) {
-	rows, err := q.db.Query(ctx, getDependentTasks, dependsOnTaskID)
+func (q *Queries) GetDependentTasksToTrigger(ctx context.Context, dependsOnTaskID pgtype.UUID) ([]Task, error) {
+	rows, err := q.db.Query(ctx, getDependentTasksToTrigger, dependsOnTaskID)
 	if err != nil {
 		return nil, err
 	}
@@ -1206,9 +1206,9 @@ type GetTaskOutputParams struct {
 	UserID string      `json:"user_id"`
 }
 
-func (q *Queries) GetTaskOutput(ctx context.Context, arg GetTaskOutputParams) ([]byte, error) {
+func (q *Queries) GetTaskOutput(ctx context.Context, arg GetTaskOutputParams) (pgtype.Text, error) {
 	row := q.db.QueryRow(ctx, getTaskOutput, arg.TaskID, arg.UserID)
-	var output_data []byte
+	var output_data pgtype.Text
 	err := row.Scan(&output_data)
 	return output_data, err
 }

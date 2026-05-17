@@ -34,8 +34,8 @@ type ExecutionTrace struct {
 	StartTime    pgtype.Timestamptz `json:"start_time"`
 	EndTime      pgtype.Timestamptz `json:"end_time"`
 	DurationMs   pgtype.Int4        `json:"duration_ms"`
-	InputData    []byte             `json:"input_data"`
-	OutputData   []byte             `json:"output_data"`
+	InputData    pgtype.Text        `json:"input_data"`
+	OutputData   pgtype.Text        `json:"output_data"`
 	IsError      pgtype.Bool        `json:"is_error"`
 	ErrorMessage pgtype.Text        `json:"error_message"`
 }

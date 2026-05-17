@@ -233,7 +233,7 @@ func (sm *SessionManager) MaintainHeartbeat(ctx context.Context, userID string, 
 									TaskID: t.DependsOnTaskID,
 									UserID: userID,
 								})
-								parentOutput = string(outBytes)
+								parentOutput = outBytes.String
 							}
 
 							executeDecisionRouter(dbCtx, mcpServer, t, parentOutput)
@@ -241,32 +241,38 @@ func (sm *SessionManager) MaintainHeartbeat(ctx context.Context, userID string, 
 						}
 
 						// 2. Resolve Prompt (Secrets + Chaining + Webhook Body)
-						queries.CreateExecutionTrace(dbCtx, db.CreateExecutionTraceParams{
+						if _, err := queries.CreateExecutionTrace(dbCtx, db.CreateExecutionTraceParams{
 							TaskID:      tid,
 							ExecutionID: executionID,
 							WorkerID:    workerID,
 							StepName:    "Prompt Resolution",
-							InputData:   []byte(prompt),
-						})
+							InputData:   pgtype.Text{String: prompt, Valid: true},
+						}); err != nil {
+							log.Printf("Trace error for task %s: %v", taskID, err)
+						}
 						finalPrompt, secretCount, chained, err := resolvePrompt(dbCtx, userID, tid, executionID, prompt, t.DependsOnTaskID, triggerPayload)
 						if err != nil {
 							log.Printf("Prompt resolution failed for task %s: %v", taskID, err)
-							queries.CreateExecutionTrace(dbCtx, db.CreateExecutionTraceParams{
+							if _, err := queries.CreateExecutionTrace(dbCtx, db.CreateExecutionTraceParams{
 								TaskID:       tid,
 								ExecutionID:  executionID,
 								WorkerID:     workerID,
 								StepName:     "Prompt Resolution Failed",
 								IsError:      pgtype.Bool{Bool: true, Valid: true},
 								ErrorMessage: pgtype.Text{String: err.Error(), Valid: true},
-							})
+							}); err != nil {
+								log.Printf("Trace error for task %s: %v", taskID, err)
+							}
 						} else {
-							queries.CreateExecutionTrace(dbCtx, db.CreateExecutionTraceParams{
+							if _, err := queries.CreateExecutionTrace(dbCtx, db.CreateExecutionTraceParams{
 								TaskID:      tid,
 								ExecutionID: executionID,
 								WorkerID:    workerID,
 								StepName:    "Prompt Resolution Success",
-								OutputData:  []byte(finalPrompt),
-							})
+								OutputData:  pgtype.Text{String: finalPrompt, Valid: true},
+							}); err != nil {
+								log.Printf("Trace error for task %s: %v", taskID, err)
+							}
 						}
 
 						sampleCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
@@ -279,13 +285,15 @@ func (sm *SessionManager) MaintainHeartbeat(ctx context.Context, userID string, 
 							return
 						}
 
-						queries.CreateExecutionTrace(dbCtx, db.CreateExecutionTraceParams{
+						if _, err := queries.CreateExecutionTrace(dbCtx, db.CreateExecutionTraceParams{
 							TaskID:      tid,
 							ExecutionID: executionID,
 							WorkerID:    workerID,
 							StepName:    "LLM Sampling",
-							InputData:   []byte(finalPrompt),
-						})
+							InputData:   pgtype.Text{String: finalPrompt, Valid: true},
+						}); err != nil {
+							log.Printf("Trace error for task %s: %v", taskID, err)
+						}
 
 						req := mcp.CreateMessageRequest{
 							CreateMessageParams: mcp.CreateMessageParams{
@@ -304,14 +312,16 @@ func (sm *SessionManager) MaintainHeartbeat(ctx context.Context, userID string, 
 							observeTaskExecutionDuration(executionStart, "failure")
 							log.Printf("Pub/Sub Sampling failed for user %s: %v", userID, err)
 
-							queries.CreateExecutionTrace(dbCtx, db.CreateExecutionTraceParams{
+							if _, err := queries.CreateExecutionTrace(dbCtx, db.CreateExecutionTraceParams{
 								TaskID:       tid,
 								ExecutionID:  executionID,
 								WorkerID:     workerID,
 								StepName:     "LLM Sampling Failed",
 								IsError:      pgtype.Bool{Bool: true, Valid: true},
 								ErrorMessage: pgtype.Text{String: err.Error(), Valid: true},
-							})
+							}); err != nil {
+								log.Printf("Trace error for task %s: %v", taskID, err)
+							}
 
 							// Phase 10.2: Properly log failure back to DB instead of failing silently
 							logID, logErr := queries.CreateTaskLog(dbCtx, db.CreateTaskLogParams{
@@ -414,6 +424,16 @@ func (sm *SessionManager) MaintainHeartbeat(ctx context.Context, userID string, 
 						log.Printf("Received LLM Response for user %s: %s", userID, llmResponse)
 						observeTaskOutcome("execution_success")
 						observeTaskExecutionDuration(executionStart, "success")
+
+						if _, err := queries.CreateExecutionTrace(dbCtx, db.CreateExecutionTraceParams{
+							TaskID:      tid,
+							ExecutionID: executionID,
+							WorkerID:    workerID,
+							StepName:    "LLM Sampling Success",
+							OutputData:  pgtype.Text{String: llmResponse, Valid: true},
+						}); err != nil {
+							log.Printf("Trace error for task %s: %v", taskID, err)
+						}
 
 						// Save the actual LLM response to the specific task log
 						logID, err := queries.CreateTaskLog(dbCtx, db.CreateTaskLogParams{

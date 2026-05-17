@@ -343,12 +343,34 @@ func apiAdminUpdateUserHandler(c echo.Context) error {
 	}
 
 	// Verify user exists
-	_, err := queries.GetUser(c.Request().Context(), input.UserID)
+	targetUser, err := queries.GetUser(c.Request().Context(), input.UserID)
 	if err != nil {
 		return c.JSON(http.StatusNotFound, APIResponse{Success: false, Error: "User not found"})
 	}
 
+	adminUser := getUserFromEcho(c)
+	if adminUser == nil {
+		return c.JSON(http.StatusUnauthorized, APIResponse{Success: false, Error: "Unauthorized"})
+	}
+
 	if input.Role != "" {
+		// Validate role
+		validRole := false
+		for _, r := range []string{"user", "staff", "admin"} {
+			if input.Role == r {
+				validRole = true
+				break
+			}
+		}
+		if !validRole {
+			return c.JSON(http.StatusBadRequest, APIResponse{Success: false, Error: "Invalid role"})
+		}
+
+		// Prevent self-demotion
+		if targetUser.ID == adminUser.ID && input.Role != "admin" {
+			return c.JSON(http.StatusForbidden, APIResponse{Success: false, Error: "Cannot demote yourself from admin"})
+		}
+
 		err := queries.UpdateUserRole(c.Request().Context(), db.UpdateUserRoleParams{
 			Role: pgtype.Text{String: input.Role, Valid: true},
 			ID:   input.UserID,
@@ -359,6 +381,18 @@ func apiAdminUpdateUserHandler(c echo.Context) error {
 	}
 
 	if input.Tier != "" {
+		// Validate tier
+		validTier := false
+		for _, t := range []string{"free", "plus", "pro"} {
+			if input.Tier == t {
+				validTier = true
+				break
+			}
+		}
+		if !validTier {
+			return c.JSON(http.StatusBadRequest, APIResponse{Success: false, Error: "Invalid tier"})
+		}
+
 		err := queries.UpdateUserTier(c.Request().Context(), db.UpdateUserTierParams{
 			Tier: pgtype.Text{String: input.Tier, Valid: true},
 			ID:   input.UserID,
@@ -367,11 +401,8 @@ func apiAdminUpdateUserHandler(c echo.Context) error {
 			return c.JSON(http.StatusInternalServerError, APIResponse{Success: false, Error: "Failed to update user tier"})
 		}
 	}
-	adminUser := getUserFromEcho(c)
-	adminID := ""
-	if adminUser != nil {
-		adminID = adminUser.ID
-	}
+	
+	adminID := adminUser.ID
 	writeAuditLog(c.Request().Context(), AuditEvent{
 		UserID:       adminID,
 		Action:       "admin.update_user",

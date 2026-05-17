@@ -42,8 +42,7 @@ const Dashboard = () => {
   }, [fetchData]);
 
   useSSE(useCallback((event) => {
-    console.log('Dashboard received SSE event:', event);
-    
+    // Dashboard received SSE event
     if (event.event_type === 'task_executed') {
       try {
         const payload = typeof event.payload === 'string' ? JSON.parse(event.payload) : event.payload;
