@@ -8,6 +8,7 @@ import ReactFlow, {
   useEdgesState,
   MarkerType
 } from 'reactflow';
+import dagre from 'dagre';
 import 'reactflow/dist/style.css';
 import DashboardLayout from '../components/DashboardLayout';
 import TaskWizard from '../components/TaskWizard';
@@ -364,6 +365,35 @@ const WorkflowCanvas = () => {
     };
   }, [fetchTasks, updateTaskStatusLocally]);
 
+  const onLayout = useCallback(() => {
+    const dagreGraph = new dagre.graphlib.Graph();
+    dagreGraph.setDefaultEdgeLabel(() => ({}));
+    dagreGraph.setGraph({ rankdir: 'LR' });
+
+    nodes.forEach((node) => {
+      dagreGraph.setNode(node.id, { width: 180, height: 100 });
+    });
+
+    edges.forEach((edge) => {
+      dagreGraph.setEdge(edge.source, edge.target);
+    });
+
+    dagre.layout(dagreGraph);
+
+    const newNodes = nodes.map((node) => {
+      const nodeWithPosition = dagreGraph.node(node.id);
+      return {
+        ...node,
+        position: {
+          x: nodeWithPosition.x - 180 / 2,
+          y: nodeWithPosition.y - 100 / 2,
+        },
+      };
+    });
+
+    setNodes(newNodes);
+  }, [nodes, edges, setNodes]);
+
   const onConnect = useCallback(async (params) => {
     const { source, target } = params;
     try {
@@ -473,6 +503,13 @@ const WorkflowCanvas = () => {
             title="Refresh Tasks"
           >
             <RefreshCw size={20} className={loading ? 'animate-spin' : ''} />
+          </button>
+          <button 
+            onClick={onLayout}
+            className="bg-white/5 text-white px-6 py-4 rounded-2xl text-xs font-black uppercase tracking-widest border border-white/10 hover:bg-white/10 transition-all flex items-center gap-2"
+          >
+            <Activity size={16} className="text-indigo-400" />
+            Auto-Layout
           </button>
           <button 
             onClick={saveLayout}
