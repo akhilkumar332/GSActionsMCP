@@ -14,6 +14,7 @@ import Monitor from './pages/Monitor';
 import WorkflowCanvas from './pages/WorkflowCanvas';
 import AdminUsers from './pages/AdminUsers';
 import AdminSEO from './pages/AdminSEO';
+import AdminSettings from './pages/AdminSettings';
 import Insights from './pages/Insights';
 import Workers from './pages/Workers';
 import { 
@@ -163,6 +164,15 @@ function App() {
             element={
               <ProtectedRoute roles={['admin']}>
                 <AdminSEO />
+              </ProtectedRoute>
+            } 
+          />
+
+          <Route 
+            path="/admin/settings" 
+            element={
+              <ProtectedRoute roles={['admin']}>
+                <AdminSettings />
               </ProtectedRoute>
             } 
           />

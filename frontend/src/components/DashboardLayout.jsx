@@ -1,6 +1,6 @@
 import { useAuth } from '../context/AuthContext';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Activity, Users, LogOut, Clock, Search, Key, ListTodo, Webhook, Folder, FileText, Share2, BarChart3 } from 'lucide-react';
+import { LayoutDashboard, Activity, Users, LogOut, Clock, Search, Key, ListTodo, Webhook, Folder, FileText, Share2, BarChart3, Settings } from 'lucide-react';
 
 const DashboardLayout = ({ children }) => {
   const { user, logout } = useAuth();
@@ -24,6 +24,7 @@ const DashboardLayout = ({ children }) => {
     { icon: BarChart3, label: 'Insights', path: '/admin/insights', roles: ['admin'] },
     { icon: Users, label: 'User Management', path: '/admin/users', roles: ['admin'] },
     { icon: Search, label: 'SEO Manager', path: '/admin/seo', roles: ['admin'] },
+    { icon: Settings, label: 'System Settings', path: '/admin/settings', roles: ['admin'] },
   ];
 
   return (
