@@ -40,7 +40,7 @@ CREATE TABLE tasks (
     encrypted_secrets BYTEA,
     last_approval_status VARCHAR(20), -- 'pending', 'approved', 'denied'
     trigger_on_completion BOOLEAN DEFAULT FALSE,
-    task_type TEXT DEFAULT 'mcp_sampling' CHECK (task_type IN ('mcp_sampling', 'native_action', 'decision_router')),
+    task_type TEXT DEFAULT 'mcp_sampling' CHECK (task_type IN ('mcp_sampling', 'native_action', 'decision_router', 'swarm_router')),
     native_code TEXT,
     workspace_id UUID, -- Managed via Workspaces Table
     max_retries INT DEFAULT 0,
@@ -49,7 +49,8 @@ CREATE TABLE tasks (
     ui_coordinates JSONB,
     branch_condition JSONB,
     is_bundle_root BOOLEAN DEFAULT FALSE,
-    loop_condition JSONB
+    loop_condition JSONB,
+    swarm_config JSONB
 );
 
 -- Index for high-speed polling
