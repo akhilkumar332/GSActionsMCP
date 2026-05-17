@@ -108,8 +108,14 @@ func maskSensitiveData(input string) string {
 		regex *regexp.Regexp
 		repl  string
 	}{
-		{regexp.MustCompile(`(?i)(api_key|password|secret|token|auth)["']?\s*[:=]\s*["']?([a-zA-Z0-9-_]{8,})["']?`), `$1: ********`},
+		// Generic key/value secrets
+		{regexp.MustCompile(`(?i)(api_key|password|secret|token|auth|key|pwd|credential)["']?\s*[:=]\s*["']?([a-zA-Z0-9._-]{8,})["']?`), `$1: ********`},
+		// Bearer tokens
 		{regexp.MustCompile(`(?i)(Bearer\s+)([a-zA-Z0-9._-]{10,})`), `$1********`},
+		// Stripe keys
+		{regexp.MustCompile(`(?i)(sk_(live|test)_)([a-zA-Z0-9]{20,})`), `********`},
+		// AWS keys
+		{regexp.MustCompile(`(AKIA[0-9A-Z]{16})`), `********`},
 	}
 
 	result := input

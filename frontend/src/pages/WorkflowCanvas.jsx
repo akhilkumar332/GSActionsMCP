@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import ReactFlow, { 
   addEdge, 
   Background, 
@@ -54,6 +54,14 @@ const WorkflowCanvas = () => {
   const [totalDuration, setTotalDuration] = useState(0);
   const playbackTimerRef = useRef(null);
   const reconnectTimeoutRef = useRef(null);
+
+  // Optimized task lookup map
+  const taskMap = useMemo(() => {
+    return rawTasks.reduce((acc, task) => {
+        acc[task.id] = task;
+        return acc;
+    }, {});
+  }, [rawTasks]);
   
   const sseRef = useRef(null);
   const isMountedRef = useRef(true);
@@ -329,7 +337,7 @@ const WorkflowCanvas = () => {
       }));
 
       setEdges(prev => prev.map(edge => {
-        const targetTask = rawTasks.find(t => t.id === edge.target);
+        const targetTask = taskMap[edge.target];
         const isActive = targetTask && activeStepNames.has(targetTask.name);
 
         return {
@@ -351,7 +359,7 @@ const WorkflowCanvas = () => {
         }
       }, 0);
     }
-  }, [playbackMode, globalTime, traces, rawTasks, fetchTasks, setNodes, setEdges]);
+  }, [playbackMode, globalTime, traces, rawTasks, fetchTasks, setNodes, setEdges, taskMap]);
 
   const updateTaskStatusLocally = useCallback((taskId, status) => {
     if (!isMountedRef.current) return;
