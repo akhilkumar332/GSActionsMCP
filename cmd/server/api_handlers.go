@@ -332,6 +332,10 @@ type AdminUpdateUserInput struct {
 	Tier   string `json:"tier"`
 }
 
+type AdminSystemSettingsInput struct {
+	WorkerPruneDays int32 `json:"worker_prune_days"`
+}
+
 func apiAdminUpdateUserHandler(c echo.Context) error {
 	var input AdminUpdateUserInput
 	if err := c.Bind(&input); err != nil {
@@ -852,4 +856,67 @@ func apiAdminUsageHandler(c echo.Context) error {
 		"task_missed":      metrics.MissedCount,
 		"audit_log_events": metrics.AuditCount,
 	}})
+}
+
+func apiAdminGetSettingsHandler(c echo.Context) error {
+	days, err := queries.GetSystemSettings(c.Request().Context())
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, APIResponse{Success: false, Error: "Failed to fetch settings"})
+	}
+
+	return c.JSON(http.StatusOK, APIResponse{
+		Success: true,
+		Data: map[string]int32{
+			"worker_prune_days": days,
+		},
+	})
+}
+
+func apiAdminUpdateSettingsHandler(c echo.Context) error {
+	var input AdminSystemSettingsInput
+	if err := c.Bind(&input); err != nil {
+		return c.JSON(http.StatusBadRequest, APIResponse{Success: false, Error: "Invalid request body"})
+	}
+
+	if input.WorkerPruneDays < 1 {
+		return c.JSON(http.StatusBadRequest, APIResponse{Success: false, Error: "Worker prune days must be at least 1"})
+	}
+
+	err := queries.UpdateSystemSettings(c.Request().Context(), input.WorkerPruneDays)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, APIResponse{Success: false, Error: "Failed to update settings"})
+	}
+
+	user := getUserFromEcho(c)
+	writeAuditLog(c.Request().Context(), AuditEvent{
+		UserID:       user.ID,
+		Action:       "admin.update_settings",
+		ResourceType: "system_settings",
+		Metadata: map[string]interface{}{
+			"worker_prune_days": input.WorkerPruneDays,
+		},
+	})
+
+	return c.JSON(http.StatusOK, APIResponse{Success: true, Message: "Settings updated successfully"})
+}
+
+func apiAdminPruneNowHandler(c echo.Context) error {
+	days, err := queries.GetSystemSettings(c.Request().Context())
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, APIResponse{Success: false, Error: "Failed to fetch settings"})
+	}
+
+	err = queries.PruneZombieWorkers(c.Request().Context(), days)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, APIResponse{Success: false, Error: "Failed to prune workers"})
+	}
+
+	user := getUserFromEcho(c)
+	writeAuditLog(c.Request().Context(), AuditEvent{
+		UserID:       user.ID,
+		Action:       "admin.prune_workers",
+		ResourceType: "system",
+	})
+
+	return c.JSON(http.StatusOK, APIResponse{Success: true, Message: "Workers pruned successfully"})
 }

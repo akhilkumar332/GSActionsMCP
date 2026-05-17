@@ -1056,6 +1056,17 @@ func (q *Queries) GetSystemUsageMetrics(ctx context.Context) (GetSystemUsageMetr
 	return i, err
 }
 
+const getSystemSettings = `-- name: GetSystemSettings :one
+SELECT worker_prune_days FROM system_settings WHERE id = 1
+`
+
+func (q *Queries) GetSystemSettings(ctx context.Context) (int32, error) {
+	row := q.db.QueryRow(ctx, getSystemSettings)
+	var worker_prune_days int32
+	err := row.Scan(&worker_prune_days)
+	return worker_prune_days, err
+}
+
 const getTaskByID = `-- name: GetTaskByID :one
 SELECT id, user_id, name, trigger_type, trigger_config, agent_prompt, status, locked_by, next_run, last_run, failure_count, missed_task_policy, depends_on_task_id, created_at, requires_approval, encrypted_secrets, last_approval_status, trigger_on_completion, task_type, native_code, workspace_id, max_retries, retry_count, backoff_strategy, ui_coordinates, branch_condition, is_bundle_root, loop_condition FROM tasks WHERE id = $1 AND user_id = $2
 `
@@ -2094,6 +2105,16 @@ func (q *Queries) MoveToDLQ(ctx context.Context, arg MoveToDLQParams) (DlqTask, 
 	return i, err
 }
 
+const pruneZombieWorkers = `-- name: PruneZombieWorkers :exec
+DELETE FROM worker_heartbeats 
+WHERE last_heartbeat < NOW() - ($1 * INTERVAL '1 day')
+`
+
+func (q *Queries) PruneZombieWorkers(ctx context.Context, dollar_1 int32) error {
+	_, err := q.db.Exec(ctx, pruneZombieWorkers, dollar_1)
+	return err
+}
+
 const reapStuckTasks = `-- name: ReapStuckTasks :execrows
 UPDATE tasks 
 SET status = 'active', locked_by = NULL 
@@ -2191,7 +2212,8 @@ type UpdateSEOSettingsParams struct {
 }
 
 func (q *Queries) UpdateSEOSettings(ctx context.Context, arg UpdateSEOSettingsParams) error {
-	_, err := q.db.Exec(ctx, updateSEOSettings,
+	_, err := q.db.Exec(ctx,
+		updateSEOSettings,
 		arg.Title,
 		arg.Description,
 		arg.Keywords,
@@ -2199,6 +2221,19 @@ func (q *Queries) UpdateSEOSettings(ctx context.Context, arg UpdateSEOSettingsPa
 	)
 	return err
 }
+
+const updateSystemSettings = `-- name: UpdateSystemSettings :exec
+UPDATE system_settings 
+SET worker_prune_days = $1, 
+    updated_at = NOW() 
+WHERE id = 1
+`
+
+func (q *Queries) UpdateSystemSettings(ctx context.Context, workerPruneDays int32) error {
+	_, err := q.db.Exec(ctx, updateSystemSettings, workerPruneDays)
+	return err
+}
+
 
 const updateTaskAgentPromptAndPolicy = `-- name: UpdateTaskAgentPromptAndPolicy :one
 UPDATE tasks

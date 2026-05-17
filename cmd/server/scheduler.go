@@ -1018,6 +1018,16 @@ func runReaper(ctx context.Context) {
 					log.Printf("Reaper: recovered %d stuck tasks", rows)
 				}
 			}
+
+			// Prune zombie workers
+			pruneDays, err := queries.GetSystemSettings(ctx)
+			if err != nil {
+				log.Printf("Reaper: error fetching prune days: %v", err)
+			} else {
+				if err := queries.PruneZombieWorkers(ctx, pruneDays); err != nil {
+					log.Printf("Reaper: error pruning zombie workers: %v", err)
+				}
+			}
 		case <-ctx.Done():
 			return
 		}

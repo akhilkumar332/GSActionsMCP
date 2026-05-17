@@ -424,6 +424,9 @@ func main() {
 	admin.GET("/workers", handleGetWorkers)
 	admin.GET("/seo", apiGetSEOHandler)
 	admin.POST("/seo", apiUpdateSEOHandler)
+	admin.GET("/settings", apiAdminGetSettingsHandler)
+	admin.POST("/settings", apiAdminUpdateSettingsHandler)
+	admin.POST("/prune", apiAdminPruneNowHandler)
 
 	e.POST("/webhooks/stripe", apiStripeWebhook)
 
