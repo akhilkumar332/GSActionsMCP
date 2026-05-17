@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { Clock, Globe, Shield, Mail } from 'lucide-react';
+import { Globe, Shield, Mail } from 'lucide-react';
 
 const Footer = () => {
   return (

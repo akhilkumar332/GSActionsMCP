@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { Terminal, ArrowRight, ShieldCheck, Clock, Sparkles } from 'lucide-react';
+import { Terminal, ArrowRight, ShieldCheck, Sparkles } from 'lucide-react';
 import { motion } from 'framer-motion';
 import Scene3D from './Scene3D';
 

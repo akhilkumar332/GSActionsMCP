@@ -66,8 +66,8 @@ func TestResolvePromptVariables(t *testing.T) {
 			return &flexibleMockRow{
 				scanFunc: func(dest ...interface{}) error {
 					if len(dest) > 0 {
-						if d, ok := dest[0].(*[]byte); ok {
-							*d = []byte(expectedOutput)
+						if d, ok := dest[0].(*pgtype.Text); ok {
+							*d = pgtype.Text{String: expectedOutput, Valid: true}
 						}
 					}
 					return nil
@@ -106,8 +106,8 @@ func TestResolvePromptVariables(t *testing.T) {
 			tidStr := formatUUID(tid)
 			return &flexibleMockRow{
 				scanFunc: func(dest ...interface{}) error {
-					if d, ok := dest[0].(*[]byte); ok {
-						*d = []byte(outputs[tidStr])
+					if d, ok := dest[0].(*pgtype.Text); ok {
+						*d = pgtype.Text{String: outputs[tidStr], Valid: true}
 					}
 					return nil
 				},
