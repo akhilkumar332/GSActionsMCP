@@ -1,67 +1,59 @@
 # Releasing Scheduled Actions MCP
 
-This document describes the process of building and releasing the Scheduled Actions MCP server.
+This document describes the process of building, verifying, and releasing the Scheduled Actions MCP server.
 
-## 1. Build Go Binaries
+## 🚀 Pre-Release Checklist
 
-Binaries must be built for all supported platforms and architectures. We use standard Go build commands.
+Before every release, you **must** run the production readiness scan:
+1.  **Concurrency Check**: Run `go test -race ./...` to detect potential deadlocks or race conditions.
+2.  **Security Audit**: Verify that all new Admin endpoints have `EchoRequireRole("admin")` and CSRF protection.
+3.  **Migration Integrity**: Ensure all new migrations in `/migrations` have been tested against a clean database.
+4.  **Frontend Polish**: Run `npm run lint` and `npm run build` to ensure no console logs or debug code leaks into production.
+
+## 1. Build Multi-Platform Binaries
+
+We use standard Go build commands. Ensure you are using Go 1.25+.
 
 ```bash
-# Create a temporary directory for binaries
+# Create binary directory
 mkdir -p dist/bin
 
-# Build for Linux (AMD64)
-GOOS=linux GOARCH=amd64 go build -o dist/bin/schedule-mcp-linux-amd64 ./cmd/server
+# Linux
+GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o dist/bin/schedule-mcp-linux-amd64 ./cmd/server
+GOOS=linux GOARCH=arm64 go build -ldflags="-s -w" -o dist/bin/schedule-mcp-linux-arm64 ./cmd/server
 
-# Build for Linux (ARM64)
-GOOS=linux GOARCH=arm64 go build -o dist/bin/schedule-mcp-linux-arm64 ./cmd/server
+# macOS
+GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w" -o dist/bin/schedule-mcp-darwin-amd64 ./cmd/server
+GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w" -o dist/bin/schedule-mcp-darwin-arm64 ./cmd/server
 
-# Build for macOS (AMD64)
-GOOS=darwin GOARCH=amd64 go build -o dist/bin/schedule-mcp-darwin-amd64 ./cmd/server
-
-# Build for macOS (ARM64)
-GOOS=darwin GOARCH=arm64 go build -o dist/bin/schedule-mcp-darwin-arm64 ./cmd/server
-
-# Build for Windows (AMD64)
-GOOS=windows GOARCH=amd64 go build -o dist/bin/schedule-mcp-windows-amd64.exe ./cmd/server
+# Windows
+GOOS=windows GOARCH=amd64 go build -ldflags="-s -w" -o dist/bin/schedule-mcp-windows-amd64.exe ./cmd/server
 ```
+*Note: `-ldflags="-s -w"` reduces binary size by stripping debug symbols.*
 
-> **Note:** Both `dist/install.sh` and `dist/npm/install.js` now expect `amd64` naming for x86_64 architectures.
+## 2. GitHub Release & Tagging
 
-## 2. GitHub Release
-
-1.  **Push Changes**: Ensure all changes are committed and pushed to the `main` branch.
-2.  **Tag the Release**: Create a new git tag for the version.
+1.  **Tagging**:
     ```bash
-    git tag -a v1.0.0 -m "Release v1.0.0"
-    git push origin v1.0.0
+    git tag -a v1.1.0 -m "Release v1.1.0: Decision Nodes and Auto-Pruning"
+    git push origin v1.1.0
     ```
-3.  **Create Release**: Go to the GitHub repository's "Releases" page and create a new release from the tag.
-4.  **Upload Artifacts**: Attach all the binaries generated in the `dist/bin/` folder to the release. The installers rely on these files being available under the "latest" release or the specific version tag.
+2.  **Upload Artifacts**: Attach the binaries from `dist/bin/` to the GitHub release. The global installers depend on these exact filenames.
 
-## 3. NPM Package Release
+## 3. NPM Wrapper Release
 
-The NPM package is a wrapper that facilitates the installation of the Go binary.
+The NPM package facilitates the installation of the pre-built Go binaries.
 
-1.  **Update Version**: Update the version number in `dist/npm/package.json`.
-    ```json
-    "version": "1.0.0"
-    ```
-2.  **Optional Frontend Sync**: It is recommended to also update the version in `frontend/package.json` to maintain consistency across the project.
-3.  **Publish to NPM**:
+1.  **Sync Versions**: Update `version` in both `dist/npm/package.json` and `frontend/package.json`.
+2.  **Publish**:
     ```bash
     cd dist/npm
     npm publish --access public
     ```
 
-## 4. Post-Release Verification
+## 4. Post-Deployment Verification
 
-After publishing, verify the installation:
-
-```bash
-# Test NPM installation
-npm install -g @gsactions/mcp
-
-# Verify the binary runs
-schedule-mcp --help
-```
+After the Docker image is deployed, verify the system health:
+- Check `/metrics` for Prometheus data.
+- Verify worker registration in the **Node Registry**.
+- Run a test task to confirm the **SSE Bridge** is alive.
