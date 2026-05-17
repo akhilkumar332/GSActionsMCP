@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import DashboardLayout from '../components/DashboardLayout';
 import axios from 'axios';
 import { Settings, Save, Trash2, RefreshCw, AlertCircle, CheckCircle2 } from 'lucide-react';
@@ -11,7 +11,7 @@ const AdminSettings = () => {
   const [pruning, setPruning] = useState(false);
   const [message, setMessage] = useState({ type: '', text: '' });
 
-  const fetchSettings = async () => {
+  const fetchSettings = useCallback(async () => {
     try {
       const res = await axios.get('/api/v1/admin/settings');
       if (res.data.success) {
@@ -23,12 +23,14 @@ const AdminSettings = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    fetchSettings();
-  }, []);
+    const init = async () => {
+      await fetchSettings();
+    };
+    init();
+  }, [fetchSettings]);
 
   const handleSave = async (e) => {
     e.preventDefault();

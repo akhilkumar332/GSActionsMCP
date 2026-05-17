@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import DashboardLayout from '../components/DashboardLayout';
 import axios from 'axios';
 import { UserCog, Shield, Star, UserCircle, Search } from 'lucide-react';
@@ -9,7 +9,7 @@ const AdminUsers = () => {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
 
-  const fetchUsers = async (query = '') => {
+  const fetchUsers = useCallback(async (query = '') => {
     try {
       const res = await axios.get(`/api/v1/admin/users?search=${encodeURIComponent(query)}`);
       if (res.data.success) {
@@ -20,14 +20,14 @@ const AdminUsers = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      fetchUsers(search);
+    const timer = setTimeout(async () => {
+      await fetchUsers(search);
     }, 500);
     return () => clearTimeout(timer);
-  }, [search]);
+  }, [search, fetchUsers]);
 
   const handleUpdate = async (userId, role, tier) => {
     try {

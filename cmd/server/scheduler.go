@@ -852,6 +852,23 @@ func evaluateWorkflowLoop(loopConfig []byte, state map[string]interface{}) bool 
 
 // compareValues handles type-agnostic comparison for workflow conditions
 func compareValues(actual interface{}, target interface{}, operator string) bool {
+	// 1. Try numeric comparison first for inequality operators
+	if operator == "greater_than" || operator == ">" || operator == "less_than" || operator == "<" {
+		sActual := fmt.Sprintf("%v", actual)
+		sTarget := fmt.Sprintf("%v", target)
+		
+		fActual, errA := strconv.ParseFloat(sActual, 64)
+		fTarget, errT := strconv.ParseFloat(sTarget, 64)
+		
+		if errA == nil && errT == nil {
+			if operator == "greater_than" || operator == ">" {
+				return fActual > fTarget
+			}
+			return fActual < fTarget
+		}
+	}
+
+	// 2. Fallback to string comparison for other operators or if numeric parsing failed
 	sActual := fmt.Sprintf("%v", actual)
 	sTarget := fmt.Sprintf("%v", target)
 
@@ -863,18 +880,8 @@ func compareValues(actual interface{}, target interface{}, operator string) bool
 	case "contains":
 		return strings.Contains(sActual, sTarget)
 	case "greater_than", ">":
-		fActual, errA := strconv.ParseFloat(sActual, 64)
-		fTarget, errT := strconv.ParseFloat(sTarget, 64)
-		if errA == nil && errT == nil {
-			return fActual > fTarget
-		}
 		return sActual > sTarget
 	case "less_than", "<":
-		fActual, errA := strconv.ParseFloat(sActual, 64)
-		fTarget, errT := strconv.ParseFloat(sTarget, 64)
-		if errA == nil && errT == nil {
-			return fActual < fTarget
-		}
 		return sActual < sTarget
 	default:
 		log.Printf("Unknown comparison operator: %s", operator)
