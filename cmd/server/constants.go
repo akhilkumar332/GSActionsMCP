@@ -24,6 +24,7 @@ const (
 	TriggerDate     = "date"
 
 	TaskTypeDecisionRouter = "decision_router"
+	TaskTypeSwarmRouter    = "swarm_router"
 
 	ApprovalStatusNeedsRouting = "needs_routing"
 )
