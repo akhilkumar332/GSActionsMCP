@@ -28,6 +28,11 @@ var stateVarRegex = regexp.MustCompile(`\{\{state\.([a-zA-Z0-9._-]+)\}\}`)
 
 // runScheduler queries the DB every 10 seconds for due tasks
 func runScheduler(ctx context.Context) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("Panic recovered in runScheduler: %v", r)
+		}
+	}()
 	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
 
@@ -64,6 +69,11 @@ type taskClaimNotification struct {
 }
 
 func listenForTaskClaims(ctx context.Context, dbURL string) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("Panic recovered in listenForTaskClaims: %v", r)
+		}
+	}()
 	backoff := time.Second
 
 	for {
@@ -957,7 +967,11 @@ func extractRawText(res interface{}) string {
 		return ""
 	}
 
-	resBytes, _ := json.Marshal(res)
+	resBytes, err := json.Marshal(res)
+	if err != nil {
+		log.Printf("Error marshaling LLM response in extractRawText: %v", err)
+		return ""
+	}
 	var resMap map[string]interface{}
 	json.Unmarshal(resBytes, &resMap)
 
@@ -1110,6 +1124,11 @@ func calculateNextRun(triggerType string, config map[string]interface{}, now tim
 // runReaper recovers tasks that were locked by a worker that crashed.
 // It runs every minute and resets tasks in 'processing' that have been stuck for more than 5 minutes.
 func runReaper(ctx context.Context) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("Panic recovered in runReaper: %v", r)
+		}
+	}()
 	reapTicker := time.NewTicker(1 * time.Minute)
 	pruneTicker := time.NewTicker(1 * time.Hour)
 	defer reapTicker.Stop()
@@ -1141,6 +1160,11 @@ func runReaper(ctx context.Context) {
 }
 
 func runWorkerHeartbeat(ctx context.Context) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("Panic recovered in runWorkerHeartbeat: %v", r)
+		}
+	}()
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
 
