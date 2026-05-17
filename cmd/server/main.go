@@ -492,6 +492,7 @@ func main() {
 
 	// 4. Start Background Scheduler & Reaper
 	go listenForTaskClaims(ctx, dbUrl)
+	go listenForTaskQueued(ctx, dbUrl)
 	go runScheduler(ctx)
 	go runReaper(ctx)
 	go runWorkerHeartbeat(ctx)

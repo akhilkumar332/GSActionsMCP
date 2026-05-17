@@ -2214,19 +2214,18 @@ func (q *Queries) PruneZombieWorkers(ctx context.Context, dollar_1 interface{}) 
 }
 
 const reapStuckTasks = `-- name: ReapStuckTasks :execrows
-UPDATE tasks 
-SET status = 'active', locked_by = NULL 
-WHERE status = 'processing' AND next_run < NOW() - INTERVAL '5 minutes'
+UPDATE tasks
+SET status = 'active', locked_by = NULL
+WHERE status = 'processing' AND next_run < $1
 `
 
-func (q *Queries) ReapStuckTasks(ctx context.Context) (int64, error) {
-	result, err := q.db.Exec(ctx, reapStuckTasks)
+func (q *Queries) ReapStuckTasks(ctx context.Context, nextRun pgtype.Timestamp) (int64, error) {
+	result, err := q.db.Exec(ctx, reapStuckTasks, nextRun)
 	if err != nil {
 		return 0, err
 	}
 	return result.RowsAffected(), nil
 }
-
 const resetTaskFailureCount = `-- name: ResetTaskFailureCount :exec
 UPDATE tasks SET status = $1, failure_count = 0 WHERE id = $2 AND user_id = $3
 `

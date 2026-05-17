@@ -26,6 +26,54 @@ import (
 var promptVarRegex = regexp.MustCompile(`\{\{task\.([0-9a-fA-F-]{36})\.output\}\}`)
 var stateVarRegex = regexp.MustCompile(`\{\{state\.([a-zA-Z0-9._-]+)\}\}`)
 
+func listenForTaskQueued(ctx context.Context, dbURL string) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("Panic recovered in listenForTaskQueued: %v", r)
+		}
+	}()
+	backoff := time.Second
+
+	for {
+		if ctx.Err() != nil {
+			return
+		}
+
+		conn, err := pgx.Connect(ctx, dbURL)
+		if err != nil {
+			log.Printf("Failed to connect task queue listener: %v. Retrying...", err)
+			time.Sleep(backoff)
+			continue
+		}
+
+		_, err = conn.Exec(ctx, "LISTEN task_queued")
+		if err != nil {
+			conn.Close(context.Background())
+			continue
+		}
+
+		for {
+			_, err := conn.WaitForNotification(ctx)
+			if err != nil {
+				conn.Close(context.Background())
+				break
+			}
+			
+			// A task is instantly ready. Attempt a claim immediately.
+			claimCtx, claimCancel := context.WithTimeout(ctx, 5*time.Second)
+			tasks, err := queries.ClaimDueTasks(claimCtx, db.ClaimDueTasksParams{
+				BatchSize: 10, // Small batch for instant events
+				WorkerID:  workerID,
+			})
+			claimCancel()
+			if err == nil && len(tasks) > 0 {
+				schedulerClaimsTotal.Add(float64(len(tasks)))
+				log.Printf("Event-driven claim: %d task(s)", len(tasks))
+			}
+		}
+	}
+}
+
 // runScheduler queries the DB every 10 seconds for due tasks
 func runScheduler(ctx context.Context) {
 	defer func() {
@@ -33,29 +81,32 @@ func runScheduler(ctx context.Context) {
 			log.Printf("Panic recovered in runScheduler: %v", r)
 		}
 	}()
-	ticker := time.NewTicker(10 * time.Second)
-	defer ticker.Stop()
 
 	for {
-		select {
-		case <-ticker.C:
-			// Claiming now emits a PostgreSQL NOTIFY from the same transaction.
-			claimCtx, claimCancel := context.WithTimeout(ctx, 5*time.Second)
-			tasks, err := queries.ClaimDueTasks(claimCtx, db.ClaimDueTasksParams{
-				BatchSize: 50,
-				WorkerID:  workerID,
-			})
-			claimCancel()
+		if ctx.Err() != nil {
+			return
+		}
 
-			if err != nil {
-				schedulerClaimErrorsTotal.Inc()
-				log.Printf("Error claiming tasks: %v", err)
-				continue
-			}
-			if len(tasks) > 0 {
-				schedulerClaimsTotal.Add(float64(len(tasks)))
-				log.Printf("Claimed %d due task(s); waiting for NOTIFY dispatch", len(tasks))
-			}
+		// Claiming now emits a PostgreSQL NOTIFY from the same transaction.
+		claimCtx, claimCancel := context.WithTimeout(ctx, 5*time.Second)
+		tasks, err := queries.ClaimDueTasks(claimCtx, db.ClaimDueTasksParams{
+			BatchSize: 50,
+			WorkerID:  workerID,
+		})
+		claimCancel()
+
+		if err != nil {
+			schedulerClaimErrorsTotal.Inc()
+			log.Printf("Error claiming tasks: %v", err)
+		} else if len(tasks) > 0 {
+			schedulerClaimsTotal.Add(float64(len(tasks)))
+			log.Printf("Claimed %d due task(s); waiting for NOTIFY dispatch", len(tasks))
+		}
+
+		pollInterval := CurrentSystemSettings.GetSchedulerPollInterval()
+		select {
+		case <-time.After(pollInterval):
+			// Loop again
 		case <-ctx.Done():
 			return
 		}
@@ -1146,7 +1197,8 @@ func runReaper(ctx context.Context) {
 	for {
 		select {
 		case <-reapTicker.C:
-			rows, err := queries.ReapStuckTasks(ctx)
+			threshold := time.Now().Add(-CurrentSystemSettings.GetReaperThreshold())
+			rows, err := queries.ReapStuckTasks(ctx, pgtype.Timestamp{Time: threshold, Valid: true})
 			if err != nil {
 				log.Printf("Reaper: error reaping stuck tasks: %v", err)
 			} else if rows > 0 {
