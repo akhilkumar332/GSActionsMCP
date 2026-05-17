@@ -215,7 +215,7 @@ func registerTools(s *server.MCPServer) {
 
 		rows, err := queries.ListUserTasks(ctx, userID)
 		if err != nil {
-			return mcp.NewToolResultError(fmt.Errorf("db error: %v", err).Error()), nil
+			return mcp.NewToolResultError(fmt.Sprintf("db error: %v", err)), nil
 		}
 
 		var tasks []map[string]interface{}

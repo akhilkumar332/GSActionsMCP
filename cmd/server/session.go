@@ -370,7 +370,7 @@ func (sm *SessionManager) MaintainHeartbeat(ctx context.Context, userID string, 
 							}
 
 							// Emit Redis event
-							evtPayload, err := json.Marshal(map[string]interface{}{
+							evtPayload, mErr := json.Marshal(map[string]interface{}{
 								"id":               formatUUID(logID),
 								"task_id":          taskID,
 								"status":           "failure",
@@ -381,44 +381,44 @@ func (sm *SessionManager) MaintainHeartbeat(ctx context.Context, userID string, 
 								"secrets_injected": secretCount,
 								"chained":          chained,
 							})
-							if err != nil {
-								log.Printf("Error marshaling failure event for %s: %v", taskID, err)
+							if mErr != nil {
+								log.Printf("Error marshaling failure event for %s: %v", taskID, mErr)
 							} else {
-								if err := PublishEvent(dbCtx, PubSubEvent{
+								if pErr := PublishEvent(dbCtx, PubSubEvent{
 									UserID:    userID,
 									EventType: "task_executed",
 									Payload:   string(evtPayload),
-								}); err != nil {
-									log.Printf("Error publishing task_executed (failure) for %s: %v", taskID, err)
+								}); pErr != nil {
+									log.Printf("Error publishing task_executed (failure) for %s: %v", taskID, pErr)
 								}
 							}
 
 							// Increment failure count securely
-							currentFailures, err := queries.IncrementTaskFailureCount(dbCtx, db.IncrementTaskFailureCountParams{
+							currentFailures, incErr := queries.IncrementTaskFailureCount(dbCtx, db.IncrementTaskFailureCountParams{
 								ID:     tid,
 								UserID: userID,
 							})
-							if err != nil {
-								log.Printf("Error incrementing failure count for task %s: %v", taskID, err)
+							if incErr != nil {
+								log.Printf("Error incrementing failure count for task %s: %v", taskID, incErr)
 							}
 
 							if currentFailures.Int32 >= 3 {
-								if err := queries.UpdateTaskStatus(dbCtx, db.UpdateTaskStatusParams{
+								if uErr := queries.UpdateTaskStatus(dbCtx, db.UpdateTaskStatusParams{
 									Status: pgtype.Text{String: StatusError, Valid: true},
 									ID:     tid,
 									UserID: userID,
-								}); err != nil {
-									log.Printf("Error updating status to error for task %s: %v", taskID, err)
+								}); uErr != nil {
+									log.Printf("Error updating status to error for task %s: %v", taskID, uErr)
 								}
 								sendFailureEmail(dbCtx, userID, taskID, t.Name)
 							} else {
 								// Unlock so it can be retried by the scheduler
-								if err := queries.UpdateTaskStatus(dbCtx, db.UpdateTaskStatusParams{
+								if uErr := queries.UpdateTaskStatus(dbCtx, db.UpdateTaskStatusParams{
 									Status: pgtype.Text{String: StatusActive, Valid: true},
 									ID:     tid,
 									UserID: userID,
-								}); err != nil {
-									log.Printf("Error updating status to active for task %s: %v", taskID, err)
+								}); uErr != nil {
+									log.Printf("Error updating status to active for task %s: %v", taskID, uErr)
 								}
 							}
 							return
@@ -498,7 +498,7 @@ func (sm *SessionManager) MaintainHeartbeat(ctx context.Context, userID string, 
 						}
 
 						// Emit Redis event
-						evtPayload, err := json.Marshal(map[string]interface{}{
+						evtPayload, mErr := json.Marshal(map[string]interface{}{
 							"id":               formatUUID(logID),
 							"task_id":          taskID,
 							"status":           "success",
@@ -509,15 +509,15 @@ func (sm *SessionManager) MaintainHeartbeat(ctx context.Context, userID string, 
 							"secrets_injected": secretCount,
 							"chained":          chained,
 						})
-						if err != nil {
-							log.Printf("Error marshaling success event for %s: %v", taskID, err)
+						if mErr != nil {
+							log.Printf("Error marshaling success event for %s: %v", taskID, mErr)
 						} else {
-							if err := PublishEvent(dbCtx, PubSubEvent{
+							if pErr := PublishEvent(dbCtx, PubSubEvent{
 								UserID:    userID,
 								EventType: "task_executed",
 								Payload:   string(evtPayload),
-							}); err != nil {
-								log.Printf("Error publishing task_executed (success) for %s: %v", taskID, err)
+							}); pErr != nil {
+								log.Printf("Error publishing task_executed (success) for %s: %v", taskID, pErr)
 							}
 						}
 

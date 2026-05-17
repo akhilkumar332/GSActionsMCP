@@ -24,12 +24,36 @@ const nodeTypes = {
 };
 
 const decodeBase64 = (str) => {
+  if (!str) return '';
   try {
-    return decodeURIComponent(atob(str).split('').map(function(c) {
-        return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
-    }).join(''));
+    const binary = atob(str);
+    try {
+      return decodeURIComponent(binary.split('').map(function(c) {
+          return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+      }).join(''));
+    } catch {
+      return binary;
+    }
   } catch {
-    return atob(str); // Fallback to atob if it's not a valid UTF-8 sequence
+    return str;
+  }
+};
+
+const safeParseJSON = (data, defaultValue = {}) => {
+  if (!data) return defaultValue;
+  if (typeof data === 'object') return data;
+  try {
+    return JSON.parse(data);
+  } catch {
+    try {
+      const decoded = decodeBase64(data);
+      if (decoded.startsWith('{') || decoded.startsWith('[')) {
+        return JSON.parse(decoded);
+      }
+    } catch {
+      // ignore
+    }
+    return defaultValue;
   }
 };
 
@@ -779,13 +803,19 @@ const WorkflowCanvas = () => {
                                <div>
                                  <div className="text-[8px] font-black uppercase text-slate-500 mb-1">Input</div>
                                  <pre className="text-[10px] bg-black/40 p-3 rounded-lg text-emerald-400 overflow-x-auto">
-                                   {traces[currentTraceIndex].input_data ? JSON.stringify(JSON.parse(traces[currentTraceIndex].input_data), null, 2) : 'null'}
+                                   {traces[currentTraceIndex].input_data ? 
+                                     (typeof safeParseJSON(traces[currentTraceIndex].input_data) === 'object' ? 
+                                       JSON.stringify(safeParseJSON(traces[currentTraceIndex].input_data), null, 2) : 
+                                       traces[currentTraceIndex].input_data) : 'null'}
                                  </pre>
                                </div>
                                <div>
                                  <div className="text-[8px] font-black uppercase text-slate-500 mb-1">Output</div>
                                  <pre className="text-[10px] bg-black/40 p-3 rounded-lg text-amber-400 overflow-x-auto">
-                                   {traces[currentTraceIndex].output_data ? JSON.stringify(JSON.parse(traces[currentTraceIndex].output_data), null, 2) : 'null'}
+                                   {traces[currentTraceIndex].output_data ? 
+                                     (typeof safeParseJSON(traces[currentTraceIndex].output_data) === 'object' ? 
+                                       JSON.stringify(safeParseJSON(traces[currentTraceIndex].output_data), null, 2) : 
+                                       traces[currentTraceIndex].output_data) : 'null'}
                                  </pre>
                                </div>
                                <div className="flex items-center justify-between pt-2 border-t border-white/5">

@@ -18,12 +18,18 @@ const TaskWizard = ({ isOpen, onClose, onTaskCreated, initialData, isInline = fa
   const [error, setError] = useState(null);
 
   const decodeBase64 = (str) => {
+    if (!str) return '';
     try {
-      return decodeURIComponent(atob(str).split('').map(function(c) {
-          return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
-      }).join(''));
+      const binary = atob(str);
+      try {
+        return decodeURIComponent(binary.split('').map(function(c) {
+            return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+        }).join(''));
+      } catch {
+        return binary;
+      }
     } catch {
-      return atob(str);
+      return str;
     }
   };
 
