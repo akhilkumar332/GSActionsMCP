@@ -30,6 +30,7 @@ func registerTools(s *server.MCPServer) {
 		mcp.WithBoolean("is_bundle_root", mcp.Description("If true, this task is the root of a workflow bundle")),
 		mcp.WithString("task_type", mcp.Description("Optional task type (e.g. decision_router, native_action)")),
 		mcp.WithString("native_code", mcp.Description("Optional JS code for native_action tasks")),
+		mcp.WithObject("swarm_config", mcp.Description("Optional swarm configuration for swarm_router tasks")),
 	)
 
 	s.AddTool(createTaskTool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -149,6 +150,15 @@ func registerTools(s *server.MCPServer) {
 			return mcp.NewToolResultError(fmt.Sprintf("invalid trigger_config JSON: %v", err)), nil
 		}
 
+		var swarmConfig []byte
+		if sc, ok := args["swarm_config"].(map[string]interface{}); ok {
+			var err error
+			swarmConfig, err = json.Marshal(sc)
+			if err != nil {
+				return mcp.NewToolResultError(fmt.Sprintf("invalid swarm_config JSON: %v", err)), nil
+			}
+		}
+
 		// Calculate initial next_run
 		nextRun, err := calculateNextRun(triggerType, triggerConfig, time.Now().UTC())
 		if err != nil {
@@ -170,6 +180,7 @@ func registerTools(s *server.MCPServer) {
 			IsBundleRoot:     pgtype.Bool{Bool: isBundleRoot, Valid: true},
 			TaskType:         pgtype.Text{String: taskType, Valid: true},
 			NativeCode:       pgtype.Text{String: nativeCode, Valid: true},
+			SwarmConfig:      swarmConfig,
 		})
 
 		if err != nil {
