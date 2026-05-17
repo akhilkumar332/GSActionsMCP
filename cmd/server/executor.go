@@ -26,8 +26,16 @@ func executeNativeJS(ctx context.Context, code string, input map[string]interfac
 		return goja.Undefined()
 	})
 
+	// Clear dangerous globals to restrict scope
+	vm.Set("process", goja.Undefined())
+	vm.Set("require", goja.Undefined())
+	vm.Set("fetch", goja.Undefined())
+	vm.Set("setTimeout", goja.Undefined())
+	vm.Set("setInterval", goja.Undefined())
+	vm.Set("globalThis", goja.Undefined())
+
 	// Set execution limit
-	timeout := 5 * time.Second
+	timeout := CurrentSystemSettings.GetJSTimeout()
 	timer := time.AfterFunc(timeout, func() {
 		vm.Interrupt(ErrExecutionTimeout)
 	})
