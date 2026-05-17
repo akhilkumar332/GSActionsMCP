@@ -17,6 +17,7 @@ import axios from 'axios';
 import { Save, RefreshCw, Layers, X, Trash2, Play, Pause, FastForward, Rewind, Activity } from 'lucide-react';
 import DecisionNode from '../components/DecisionNode';
 import ManualRouteModal from '../components/ManualRouteModal';
+import GlobalPlaybackBar from '../components/GlobalPlaybackBar';
 
 const nodeTypes = {
   decision: DecisionNode,
@@ -39,6 +40,8 @@ const WorkflowCanvas = () => {
   const [traces, setTraces] = useState([]);
   const [currentTraceIndex, setCurrentTraceIndex] = useState(-1);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [globalTime, setGlobalTime] = useState(0);
+  const [totalDuration, setTotalDuration] = useState(0);
   const playbackTimerRef = useRef(null);
   const reconnectTimeoutRef = useRef(null);
   
@@ -200,8 +203,17 @@ const WorkflowCanvas = () => {
     try {
       const res = await axios.get(`/api/v1/tasks/${taskId}/traces/${executionId}`);
       if (res.data.success) {
-        setTraces(res.data.data || []);
+        const tracesData = res.data.data || [];
+        setTraces(tracesData);
         setCurrentTraceIndex(0);
+        
+        // Calculate total duration for the playback bar
+        if (tracesData.length > 0) {
+          const start = new Date(tracesData[0].start_time);
+          const end = new Date(tracesData[tracesData.length - 1].end_time);
+          setTotalDuration(Math.max(0, (end - start) / 1000));
+          setGlobalTime(0);
+        }
       }
     } catch (err) {
       console.error('Failed to fetch traces', err);
@@ -217,6 +229,8 @@ const WorkflowCanvas = () => {
         setTraces([]);
         setCurrentTraceIndex(-1);
         setIsPlaying(false);
+        setGlobalTime(0);
+        setTotalDuration(0);
       }
     };
     loadExecutions();
@@ -235,19 +249,38 @@ const WorkflowCanvas = () => {
   useEffect(() => {
     if (isPlaying && traces.length > 0) {
       playbackTimerRef.current = setInterval(() => {
-        setCurrentTraceIndex(prev => {
-          if (prev >= traces.length - 1) {
+        setGlobalTime(prev => {
+          if (prev >= totalDuration) {
             setIsPlaying(false);
-            return prev;
+            return totalDuration;
           }
-          return prev + 1;
+          return prev + 0.05; // 50ms steps
         });
-      }, 1000);
+      }, 50);
     } else {
       clearInterval(playbackTimerRef.current);
     }
     return () => clearInterval(playbackTimerRef.current);
-  }, [isPlaying, traces]);
+  }, [isPlaying, traces, totalDuration]);
+
+  // Sync globalTime to currentTraceIndex
+  useEffect(() => {
+    if (playbackMode && traces.length > 0) {
+      const startTime = new Date(traces[0].start_time).getTime();
+      const targetTime = startTime + (globalTime * 1000);
+      
+      let foundIndex = 0;
+      for (let i = 0; i < traces.length; i++) {
+        const traceStart = new Date(traces[i].start_time).getTime();
+        if (traceStart <= targetTime) {
+          foundIndex = i;
+        } else {
+          break;
+        }
+      }
+      setCurrentTraceIndex(foundIndex);
+    }
+  }, [globalTime, playbackMode, traces]);
 
   // Update visual nodes based on playback
   useEffect(() => {
@@ -728,6 +761,18 @@ const WorkflowCanvas = () => {
                 </div>
               </motion.div>
             </>
+          )}
+        </AnimatePresence>
+
+        <AnimatePresence>
+          {playbackMode && (
+            <GlobalPlaybackBar 
+              currentTime={globalTime}
+              duration={totalDuration}
+              onTimeChange={setGlobalTime}
+              isPlaying={isPlaying}
+              onTogglePlay={() => setIsPlaying(!isPlaying)}
+            />
           )}
         </AnimatePresence>
       </div>
